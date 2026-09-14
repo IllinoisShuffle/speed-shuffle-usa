@@ -1,0 +1,15 @@
+---
+import { clubsById } from '../lib/clubs';
+import type { ClubStats } from '../lib/types';
+interface Props { stats: ClubStats }
+const { stats } = Astro.props;
+const club = clubsById[stats.clubId];
+---
+<li class="club-card" data-club-card={club.id} style={`--club-color: ${club.color}`}>
+  <h3><span class="club-dot" aria-hidden="true"></span>{club.name}</h3>
+  <p class="club-location">{club.location}</p>
+  <dl class="club-counts">
+    <div><dt>Registered</dt><dd data-registered>—</dd></div>
+    <div><dt>Completed</dt><dd data-completed>—</dd></div>
+  </dl>
+</li>

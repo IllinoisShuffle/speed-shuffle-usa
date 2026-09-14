@@ -1,0 +1,120 @@
+:root {
+  --color-brand: #4b35f5;
+  --color-brand-secondary: #5338f5;
+  --color-background: #f3f4f6;
+  --color-surface: #fff;
+  --color-text: #111827;
+  --color-text-secondary: #172033;
+  --color-text-muted: #667085;
+  --color-border: #e2e5ea;
+  --color-soft: #f7f6ff;
+  --radius-card: 16px;
+  --radius-small: 10px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--color-text);
+  background: var(--color-background);
+  font-synthesis: none;
+  line-height: 1.5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { color: var(--color-text-secondary); line-height: 1.25; }
+h1 { font-size: clamp(1.7rem, 3vw, 2.25rem); letter-spacing: -.035em; }
+h2 { font-size: 1.2rem; letter-spacing: -.02em; }
+h3 { font-size: .93rem; }
+a { color: var(--color-brand); }
+a:focus-visible { outline: 3px solid currentColor; outline-offset: 5px; border-radius: 3px; }
+.shell { width: min(1220px, calc(100% - 64px)); margin-inline: auto; }
+.site-header { background: var(--color-brand); color: white; padding-bottom: 85px; }
+.brand-line { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding-block: 22px; border-bottom: 1px solid rgb(255 255 255 / .25); }
+.brand { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; font-weight: 650; }
+.brand img { border: 1px solid rgb(255 255 255 / .4); border-radius: 11px; }
+.event-date { white-space: nowrap; font-size: .9rem; }
+.header-title { font-size: clamp(1.15rem, 2.3vw, 1.75rem); font-weight: 700; letter-spacing: -.025em; padding-top: 28px; }
+.main-surface { position: relative; margin-top: -48px; padding: 36px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-card); }
+.event-intro > p { color: var(--color-text-muted); max-width: 780px; margin-top: 14px; }
+.eyebrow-line { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 15px; }
+.eyebrow { font-size: .73rem; text-transform: uppercase; font-weight: 750; letter-spacing: .09em; color: var(--color-brand); }
+.badge { display: inline-block; border: 1px solid var(--color-border); background: var(--color-soft); color: var(--color-brand); border-radius: 30px; padding: 4px 10px; font-size: .75rem; font-weight: 600; white-space: nowrap; }
+.muted { color: var(--color-text-muted); font-size: .84rem; }
+.connection-bar { margin-top: 24px; padding: 14px; background: var(--color-background); border-radius: var(--radius-small); display: flex; align-items: center; justify-content: space-between; gap: 15px; font-size: .85rem; }
+.connection-bar button { background: white; color: var(--color-brand); border: 1px solid var(--color-border); border-radius: 8px; padding: 9px 14px; cursor: pointer; font: inherit; }
+.connection-bar button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3px; }
+.connection-bar button:disabled { cursor: wait; opacity: .6; }
+.club-summary { margin-block: 32px; }
+.section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.club-grid { padding: 0; margin: 0; list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.club-card { padding: 17px 14px; border: 1px solid var(--color-border); border-top: 3px solid var(--club-color); border-radius: var(--radius-small); }
+.club-card h3 { display: flex; align-items: center; gap: 7px; }
+.club-dot { display: inline-block; flex: 0 0 7px; width: 7px; height: 7px; background: var(--club-color); border-radius: 50%; }
+.club-location { color: var(--color-text-muted); font-size: .75rem; margin-top: 5px; }
+.club-counts { display: flex; justify-content: space-between; gap: 8px; margin: 19px 0 0; }
+.club-counts div { display: flex; flex-direction: column-reverse; }
+.club-counts dt { color: var(--color-text-muted); font-size: .7rem; }
+.club-counts dd { margin: 0; font-size: 1.45rem; font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.results-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; align-items: start; gap: 24px; }
+.panel { border: 1px solid var(--color-border); border-radius: var(--radius-card); overflow: hidden; }
+.panel-heading { padding: 22px 24px 18px; display: flex; align-items: start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.panel-heading .muted { margin-top: 6px; }
+.payout-note { width: 100%; font-size: .77rem; color: var(--color-brand); }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+thead { background: var(--color-background); }
+th, td { padding: 15px 14px; text-align: left; border-top: 1px solid var(--color-border); }
+thead th { font-size: .72rem; color: var(--color-text-muted); font-weight: 600; }
+.rank { width: 65px; text-align: center; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.player-name { font-weight: 600; }
+.payout-row { background: var(--color-soft); }
+.payout-row .rank { color: var(--color-brand); font-weight: 750; }
+.club-label { display: flex; align-items: center; gap: 8px; color: var(--color-text-muted); font-size: .83rem; }
+.score { text-align: right; padding-right: 22px; font-variant-numeric: tabular-nums; font-weight: 650; }
+.table-footer { border-top: 1px solid var(--color-border); padding: 15px 24px; color: var(--color-text-muted); font-size: .75rem; }
+.club-standings { padding: 22px; }
+.club-standings > .muted { margin-top: 6px; }
+.standings-list { padding: 0; margin: 23px 0 0; list-style: none; }
+.standings-list li + li { margin-top: 22px; }
+.standings-list h3 { display: flex; align-items: center; gap: 8px; }
+.standings-counts { display: flex; justify-content: space-between; gap: 5px; font-size: .7rem; color: var(--color-text-muted); margin-block: 8px; }
+.standings-counts strong { color: var(--color-text-secondary); font-weight: 600; }
+progress { width: 100%; height: 5px; display: block; border: none; border-radius: 8px; overflow: hidden; background: var(--color-background); color: var(--club-color); }
+progress::-webkit-progress-bar { background: var(--color-background); }
+progress::-webkit-progress-value { background: var(--club-color); border-radius: 8px; }
+progress::-moz-progress-bar { background: var(--club-color); }
+.sidebar-note { border-top: 1px solid var(--color-border); margin-top: 24px; padding-top: 18px; color: var(--color-text-muted); font-size: .77rem; }
+.page-footer { margin-top: 32px; padding-top: 22px; border-top: 1px solid var(--color-border); color: var(--color-text-muted); font-size: .8rem; }
+.page-footer p + p { margin-top: 4px; }
+.site-footer { display: flex; justify-content: space-between; gap: 16px; padding-block: 28px 36px; color: var(--color-text-muted); font-size: .75rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.skip-link { position: absolute; top: -100px; left: 16px; z-index: 10; background: white; padding: 12px; }
+.skip-link:focus { top: 12px; }
+@media (max-width: 1050px) {
+  .club-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .results-layout { grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; }
+  .main-surface { padding: 28px; }
+  .club-standings { padding: 18px; }
+}
+@media (max-width: 800px) {
+  .shell { width: calc(100% - 32px); }
+  .results-layout { grid-template-columns: minmax(0, 1fr); }
+  .brand { font-size: .85rem; }
+  .main-surface { padding: 24px; }
+  .site-footer { flex-direction: column; gap: 5px; }
+}
+@media (max-width: 520px) {
+  .brand-line { gap: 12px; padding-block: 17px; }
+  .brand { gap: 8px; font-size: .75rem; }
+  .brand img { width: 32px; height: 32px; }
+  .event-date { font-size: .7rem; }
+  .main-surface { padding: 20px 14px; }
+  .section-heading { flex-direction: column; gap: 4px; }
+  .club-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .club-card { padding: 14px; }
+  .club-counts { justify-content: start; gap: 36px; margin-top: 10px; }
+  .panel-heading { padding: 18px 14px; }
+  th, td { padding: 14px 7px; }
+  table { font-size: .84rem; }
+  .rank { width: 38px; }
+  .club-label { font-size: .75rem; gap: 5px; }
+  .score { padding-right: 9px; }
+  .table-footer { padding: 14px; }
+}
