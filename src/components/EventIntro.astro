@@ -1,0 +1,10 @@
+---
+interface Props { showScores: boolean }
+const { showScores } = Astro.props;
+---
+<section class="event-intro" aria-labelledby="event-title">
+  <div class="eyebrow-line"><span class="eyebrow">Five clubs. One leaderboard.</span><span class="badge">October 2026</span></div>
+  <h1 id="event-title">Speed Shuffling Across the USA</h1>
+  <p>Follow the standings as players from five shuffleboard clubs compete throughout October.{' '}
+    {showScores ? 'Final scores are now displayed.' : 'Scores stay hidden until the tournament concludes.'}</p>
+</section>

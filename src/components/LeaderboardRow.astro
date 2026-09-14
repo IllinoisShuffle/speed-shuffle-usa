@@ -1,0 +1,14 @@
+---
+import { clubsById } from '../lib/clubs';
+import type { PlayerStanding } from '../lib/types';
+interface Props { player: PlayerStanding; showScores: boolean; payoutPositions: number }
+const { player, showScores, payoutPositions } = Astro.props;
+const club = clubsById[player.clubId];
+const isPayout = player.rank <= payoutPositions;
+---
+<tr class:list={[{ 'payout-row': isPayout }]} data-player-id={player.id}>
+  <td class="rank">{player.rank}<span class="sr-only">{isPayout ? ' · Payout position' : ''}</span></td>
+  <th scope="row" class="player-name">{player.displayName}</th>
+  <td><span class="club-label" style={`--club-color: ${club.color}`}><span class="club-dot" aria-hidden="true"></span>{club.shortName}</span></td>
+  {showScores && <td class="score" data-player-score>{player.score ?? '—'}</td>}
+</tr>

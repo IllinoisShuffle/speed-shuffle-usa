@@ -1,0 +1,10 @@
+---
+import ClubSummaryCard from './ClubSummaryCard.astro';
+import type { ClubStats } from '../lib/types';
+interface Props { stats: ClubStats[] }
+const { stats } = Astro.props;
+---
+<section class="club-summary" aria-labelledby="participation-title">
+  <div class="section-heading"><h2 id="participation-title">Around the clubs</h2><span class="muted">Registered and completed</span></div>
+  <ul class="club-grid">{stats.map(club => <ClubSummaryCard stats={club} />)}</ul>
+</section>

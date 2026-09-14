@@ -1,0 +1,22 @@
+---
+import { clubsById } from '../lib/clubs';
+import type { ClubStats } from '../lib/types';
+interface Props { stats: ClubStats[] }
+const { stats } = Astro.props;
+const standings = stats.toSorted((a, b) => b.completed - a.completed);
+---
+<aside class="panel club-standings" aria-labelledby="clubs-title">
+  <h2 id="clubs-title">Club standings</h2>
+  <p class="muted">Participation · most completed</p>
+  <ul class="standings-list" id="club-standings-list">
+    {standings.map(stats => {
+      const club = clubsById[stats.clubId];
+      return <li data-club-standing={club.id} style={`--club-color: ${club.color}`}>
+        <h3><span class="club-dot" aria-hidden="true"></span>{club.shortName}</h3>
+        <div class="standings-counts"><span data-registered>— registered</span><strong data-completed>— completed</strong></div>
+        <progress value={stats.completed} max={Math.max(1, stats.registered)} aria-label={`${club.name}: ${stats.completed} of ${stats.registered} registered players completed`} />
+      </li>;
+    })}
+  </ul>
+  <p class="sidebar-note">A little friendly club rivalry. These are participation counts, not a performance ranking.</p>
+</aside>

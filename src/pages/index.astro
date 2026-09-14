@@ -1,0 +1,30 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import EventIntro from '../components/EventIntro.astro';
+import ClubSummary from '../components/ClubSummary.astro';
+import Leaderboard from '../components/Leaderboard.astro';
+import ClubStandings from '../components/ClubStandings.astro';
+import { clubs } from '../lib/clubs';
+import type { PlayerStanding } from '../lib/types';
+import { tournamentConfig } from '../lib/config';
+
+const players: PlayerStanding[] = [];
+const stats = clubs.map(club => ({ clubId: club.id, registered: 0, completed: 0 }));
+---
+<BaseLayout>
+  <Header />
+  <main id="main" class="shell main-surface">
+    <EventIntro showScores={tournamentConfig.showScores} />
+    <div class="connection-bar"><p id="connection-status" role="status" aria-live="polite">Connecting to the leaderboard…</p><button id="refresh-leaderboard" type="button">Refresh</button></div>
+    <noscript>Enable JavaScript to load the latest standings.</noscript>
+    <ClubSummary stats={stats} />
+    <div class="results-layout">
+      <Leaderboard players={players} showScores={tournamentConfig.showScores} payoutPositions={tournamentConfig.payoutPositions} />
+      <ClubStandings stats={stats} />
+    </div>
+    <footer class="page-footer"><p>October 2026 · Five clubs across the USA</p><p>One attempt per player. Results entered after each session.</p></footer>
+  </main>
+  <footer class="site-footer shell"><span>Illinois Shuffleboard Association</span><span>Speed Shuffling Across the USA</span></footer>
+  <script>import '../scripts/live-leaderboard';</script>
+</BaseLayout>
