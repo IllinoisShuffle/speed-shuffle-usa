@@ -16,8 +16,8 @@ export function parseStandings(values: Cell[][], showScores: boolean) {
   const completed: Array<PlayerStanding & { score: number; visible: boolean }> = [];
 
   for (const [index, row] of values.slice(1).entries()) {
-    if (row.every(cell => String(cell).trim() === '')) continue;
     const cell = (name: string) => String(row[headers.indexOf(name)] ?? '').trim();
+    if (!cell('registration_id')) continue;
     const invalid = () => new SheetError(`Check the required fields in master sheet row ${index + 2}.`);
     const id = cell('registration_id');
     const clubId = cell('club') as ClubId;
