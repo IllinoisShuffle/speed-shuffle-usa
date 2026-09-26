@@ -1,6 +1,6 @@
 ---
 import Logo from './Logo.astro';
-import { clubs, organizerLogos } from '../lib/clubs';
+import { clubs, organizerLogos, organizerNames, organizerWebsites } from '../lib/clubs';
 
 const organizers: Array<'ILSA' | 'NYSA'> = ['ILSA', 'NYSA'];
 ---
@@ -22,7 +22,9 @@ const organizers: Array<'ILSA' | 'NYSA'> = ['ILSA', 'NYSA'];
         <p class="footer-logo-label">Organizers</p>
         <div class="footer-logo-row">
           {organizers.map(id => (
-            <span class="footer-logo-tile"><img src={`/club-logos/${organizerLogos[id]}`} alt={id} /></span>
+            <a class="footer-logo-tile" href={organizerWebsites[id]} target="_blank" rel="noopener noreferrer" aria-label={`${organizerNames[id]} website (opens in a new tab)`}>
+              <img src={`/club-logos/${organizerLogos[id]}`} alt="" />
+            </a>
           ))}
         </div>
       </div>

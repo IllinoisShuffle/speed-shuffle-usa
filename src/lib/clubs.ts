@@ -89,3 +89,8 @@ export const organizerLogos: Record<OrganizerId, string> = {
   ILSA: 'org-ilsa.png',
   NYSA: 'org-nysa.png',
 };
+
+export const organizerWebsites: Record<OrganizerId, string> = {
+  ILSA: 'https://www.illinoisshuffleboard.org/',
+  NYSA: 'https://newyorkshuffleboard.org/',
+};
