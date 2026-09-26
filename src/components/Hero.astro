@@ -1,0 +1,91 @@
+---
+import { registrationUrl, tournamentConfig, tournamentDates } from '../lib/config';
+
+const { stage } = tournamentConfig;
+
+const badge = { before: 'Registration open', during: 'Live now', final: 'Final results' }[stage];
+
+const daysLeft = tournamentDates.end
+  ? Math.max(0, Math.ceil((new Date(tournamentDates.end).getTime() - Date.now()) / 86_400_000))
+  : null;
+
+const subLine = {
+  before: 'October 2026 · five clubs, one leaderboard',
+  during: daysLeft !== null ? `October 2026 · ${daysLeft} days left to shoot your entry` : 'October 2026 · dates confirmed soon',
+  final: 'October 2026 · five clubs, one leaderboard',
+}[stage];
+
+const ctas = {
+  before: {
+    primary: { label: 'Register now', href: registrationUrl },
+    secondary: { label: 'How it works', href: '#how-it-works' },
+    text: { label: 'See the leaderboard', href: '#leaderboard' },
+  },
+  during: {
+    primary: { label: 'Register now', href: registrationUrl },
+    secondary: { label: 'See the leaderboard', href: '#leaderboard' },
+    text: { label: 'How it works', href: '#how-it-works' },
+  },
+  final: {
+    primary: { label: 'See the winners', href: '#winners' },
+    secondary: { label: 'Full results', href: '#leaderboard' },
+    text: { label: 'About the format', href: '#how-it-works' },
+  },
+}[stage];
+
+interface HeroStat { value: string; label: string; accent?: boolean; live?: string }
+
+const stats: HeroStat[] = {
+  before: [
+    { value: '5', label: 'Clubs' },
+    { value: '1', label: 'Entry per player' },
+    { value: '28', label: 'Scored discs' },
+    { value: 'Top 10', label: 'Players paid', accent: true },
+  ],
+  during: [
+    { value: '—', label: 'Registered', live: 'registered' },
+    { value: '—', label: 'Completed', live: 'completed' },
+    { value: daysLeft !== null ? String(daysLeft) : 'TBD', label: 'Days left' },
+    { value: 'Top 10', label: 'Players paid', accent: true },
+  ],
+  final: [
+    { value: '—', label: 'Players', live: 'players' },
+    { value: '5', label: 'Clubs' },
+    { value: '—', label: 'Top score', live: 'top-score' },
+    { value: 'Top 10', label: 'Players paid', accent: true },
+  ],
+}[stage];
+---
+<section class="hero" id="hero">
+  <div class="shell hero-grid">
+    <div class="hero-copy">
+      <div class="hero-meta">
+        <span class="badge badge--accent">{badge}</span>
+        <span class="hero-subline">{subLine}</span>
+      </div>
+      <h1 class="hero-title skew">SPEED SHUFFLING<br /><span class="hero-title-accent">ACROSS THE USA</span></h1>
+      <p class="hero-lead">
+        {stage === 'before' && <>Shuffleboard clubs across the country, playing together. Shoot your one entry on your home courts, and your score goes onto a national leaderboard. <strong>The top 10 players split the prize pool.</strong></>}
+        {stage === 'during' && <>Players at five clubs are shooting their entries through the month of October, and ranks update after every session. There is still time to register and get on the board. <strong>The top 10 players split the prize pool.</strong></>}
+        {stage === 'final' && <>The 2026 tournament is in the books. Thank you to every player and every club that took part. <strong>Congratulations to our top 10.</strong></>}
+      </p>
+      <div class="hero-cta-row">
+        <a class="btn btn-primary" href={ctas.primary.href}>{ctas.primary.label}</a>
+        <a class="btn btn-outline on-dark" href={ctas.secondary.href}>{ctas.secondary.label}</a>
+        <a class="btn-text on-dark" href={ctas.text.href}>{ctas.text.label}<span class="arrow" aria-hidden="true">→</span></a>
+      </div>
+      <dl class="hero-stats">
+        {stats.map(stat => (
+          <div class:list={[{ 'hero-stat--accent': stat.accent }]}>
+            <dt class="sr-only">{stat.label}</dt>
+            <dd data-hero-stat={stat.live ?? undefined}>{stat.value}</dd>
+            <span class="hero-stat-label">{stat.label}</span>
+          </div>
+        ))}
+      </dl>
+    </div>
+    <figure class="hero-diagram-wrap" aria-hidden="false">
+      <img class="hero-diagram" src="/diagram/court-diagram.svg" width="330" height="690" alt="Scoring diagram of a shuffleboard court: a 10 region at the narrow apex, two 8 regions below it, two 7 regions below those, and a 10-off region spanning the base nearest the players." />
+    </figure>
+  </div>
+</section>

@@ -1,0 +1,44 @@
+---
+import Logo from './Logo.astro';
+import { clubs, organizerLogos } from '../lib/clubs';
+
+const organizers: Array<'ILSA' | 'NYSA'> = ['ILSA', 'NYSA'];
+---
+<footer class="site-footer">
+  <div class="shell footer-inner">
+    <div class="footer-brand">
+      <Logo size={52} />
+      <p class="wordmark-stacked skew">
+        <span class="wordmark-speed">SPEED</span>
+        <span>SHUFFLE</span>
+      </p>
+      <p class="wordmark-sub">Across the USA</p>
+    </div>
+
+    <p class="footer-tagline">A cross-club tournament organized by the Illinois Shuffleboard Association.</p>
+
+    <div class="footer-logos">
+      <div class="footer-logo-group">
+        <p class="footer-logo-label">Organizers</p>
+        <div class="footer-logo-row">
+          {organizers.map(id => (
+            <span class="footer-logo-tile"><img src={`/club-logos/${organizerLogos[id]}`} alt={id} /></span>
+          ))}
+        </div>
+      </div>
+      <div class="footer-logo-group">
+        <p class="footer-logo-label">Host clubs</p>
+        <div class="footer-logo-row">
+          {clubs.map(club => (
+            <span class="footer-logo-tile"><img src={`/club-logos/${club.logoFile}`} alt={club.name} /></span>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-meta">
+      <span>October 2026 · One entry per player</span>
+      <span>© 2026 Illinois Shuffleboard Association</span>
+    </div>
+  </div>
+</footer>

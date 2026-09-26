@@ -1,0 +1,55 @@
+---
+const columns = [
+  {
+    title: 'Entry',
+    items: [
+      'Each player gets one entry.',
+      'Register for your home club; one ticket per person.',
+      'Entries are shot only during sessions your club schedules.',
+    ],
+  },
+  {
+    title: 'Frames & scoring',
+    items: [
+      'An entry is 4 frames of speed shuffle in a row, on the same court.',
+      'Frames 1 and 3 are shot from the head of the court; frames 2 and 4 from the foot.',
+      'The first disc of each frame is a practice shot for speed and is removed from the court.',
+      'Discs 2–8 of each frame count: 28 discs in total.',
+    ],
+  },
+  {
+    title: 'Rankings',
+    items: [
+      'Results are entered after each session.',
+      'Totals are published when the tournament ends.',
+      'Equal totals share a rank. Final tie decisions belong to the organizers.',
+    ],
+  },
+  {
+    title: 'Prizes',
+    items: [
+      'The top 10 players win prizes.',
+      'The pool size depends on how many players register.',
+      'Payouts are sent through Zelle.',
+    ],
+  },
+];
+---
+<section class="section rules" id="rules" aria-labelledby="rules-title">
+  <div class="shell">
+    <div class="section-kicker">
+      <span class="eyebrow">The fine print</span>
+      <h2 id="rules-title">Rules & format</h2>
+    </div>
+    <div class="rules-grid">
+      {columns.map(column => (
+        <div class="rules-column">
+          <h3>{column.title}</h3>
+          <ul>
+            {column.items.map(item => <li>{item}</li>)}
+          </ul>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

@@ -1,0 +1,49 @@
+---
+import { registrationUrl } from '../lib/config';
+import { PRIZE_PERCENTAGES } from '../lib/prizes';
+
+const frames = [1, 2, 3, 4].map(number => ({ number, end: number % 2 === 1 ? 'From the head' : 'From the foot' }));
+const ordinals = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
+const maxPercent = PRIZE_PERCENTAGES[0];
+---
+<section class="section entry-prizes" id="prizes" aria-labelledby="prizes-title">
+  <div class="shell entry-prizes-grid">
+    <div class="card entry-card">
+      <h3>Your entry</h3>
+      <p class="entry-copy">4 consecutive frames on the same court, alternating ends: frames 1 and 3 from the head, 2 and 4 from the foot. Disc 1 of each frame is a practice shot for speed and is removed from the court; discs 2–8 count.</p>
+      <div class="entry-diagram" role="img" aria-label="Four frames of eight discs each. The first disc of every frame is a practice shot; discs two through eight are scored, for 28 scored discs total.">
+        {frames.map(frame => (
+          <div class="entry-row">
+            <div class="entry-row-label">
+              <span class="entry-row-frame">Frame {frame.number}</span>
+              <span class="entry-row-end">{frame.end}</span>
+            </div>
+            <div class="entry-discs" aria-hidden="true">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <span class:list={['entry-disc', { 'entry-disc--practice': i === 0 }]}></span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p class="entry-summary">7 × 4 = <strong>28 discs</strong> toward your total</p>
+    </div>
+
+    <div class="card prizes-card">
+      <h3 id="prizes-title">Prizes for the top 10</h3>
+      <p class="prizes-copy">The prize pool grows with every registration. Payouts are sent through Zelle.</p>
+      <ul class="prize-bars">
+        {PRIZE_PERCENTAGES.map((percent, index) => (
+          <li>
+            <span class="prize-place">{ordinals[index]}</span>
+            <span class="prize-bar-track">
+              <span class="prize-bar-fill" style={`width:${(percent / maxPercent) * 100}%`}></span>
+            </span>
+            <span class="prize-percent">{percent}%</span>
+          </li>
+        ))}
+      </ul>
+      <a class="btn btn-primary prizes-cta" href={registrationUrl}>Register to add to the pool</a>
+    </div>
+  </div>
+</section>

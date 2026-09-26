@@ -1,19 +1,66 @@
 ---
-import LeaderboardRow from './LeaderboardRow.astro';
-import type { PlayerStanding } from '../lib/types';
-interface Props { players: PlayerStanding[]; showScores: boolean; payoutPositions: number }
-const { players, showScores, payoutPositions } = Astro.props;
+import { clubs } from '../lib/clubs';
+import { tournamentConfig, tournamentDates } from '../lib/config';
+
+const { stage, payoutPositions } = tournamentConfig;
 ---
-<section class="panel leaderboard" aria-labelledby="leaderboard-title">
-  <div class="panel-heading">
-    <div><h2 id="leaderboard-title">Individual leaderboard</h2><p class="muted"><span id="player-count">{players.length}</span> players · overall rank</p></div>
-    <span class="badge" id="score-status">{showScores ? 'Scores revealed' : 'Scores hidden'}</span>
-    <p class="payout-note">Top {payoutPositions} are payout positions</p>
+<section class="section leaderboard-section" id="leaderboard" aria-labelledby="leaderboard-title">
+  <div class="shell">
+    <div class="section-head">
+      <div class="section-kicker">
+        <span class="eyebrow">Standings</span>
+        <h2 id="leaderboard-title">Leaderboard</h2>
+      </div>
+      <span class="badge" id="score-status">{stage === 'final' ? 'Scores revealed' : 'Scores hidden'}</span>
+    </div>
+
+    <div class="connection-bar"><p id="connection-status" role="status" aria-live="polite">Connecting to the leaderboard…</p></div>
+    <noscript><p class="noscript-note">Enable JavaScript to load the latest standings.</p></noscript>
+
+    <div class="leaderboard-layout">
+      <div class="card leaderboard-panel">
+        <div class="leaderboard-empty" id="leaderboard-empty" hidden>
+          <p class="leaderboard-empty-title">The board opens {tournamentDates.boardOpensLabel}</p>
+          <p class="leaderboard-empty-body">Rankings appear as soon as the first entries are recorded. Register now and your name will be on it.</p>
+        </div>
+
+        <div class="leaderboard-content" id="leaderboard-content">
+          <div class="filter-row" id="club-filters" role="group" aria-label="Filter by club">
+            <button type="button" class="filter-pill" data-club-filter="all" aria-pressed="true">All clubs</button>
+            {clubs.map(club => (
+              <button type="button" class="filter-pill" data-club-filter={club.id} aria-pressed="false" style={`--filter-color:${club.accentColor}; --filter-ink:${club.labelTextColor}`}>{club.shortName}</button>
+            ))}
+          </div>
+
+          <p class="payout-note">Top {payoutPositions} are payout positions</p>
+
+          <div class="leaderboard-table-wrap">
+            <table>
+              <caption class="sr-only">Individual standings. Top {payoutPositions} are payout positions.</caption>
+              <thead id="leaderboard-head">
+                <tr>
+                  <th scope="col" class="rank">Rank</th>
+                  <th scope="col">Player</th>
+                  <th scope="col">Club</th>
+                  <th scope="col" class="score">Score</th>
+                  {stage === 'final' && <th scope="col" class="prize">Prize %</th>}
+                </tr>
+              </thead>
+              <tbody id="leaderboard-body"></tbody>
+            </table>
+          </div>
+
+          <button type="button" class="show-all-toggle" id="show-all-players" hidden aria-expanded="false">Show all players</button>
+
+          <p class="table-footer">Equal totals share a rank; final tie and payout decisions belong to the organizers.</p>
+        </div>
+      </div>
+
+      <aside class="card club-standings" id="club-standings" aria-labelledby="club-standings-title">
+        <h3 id="club-standings-title">Club standings</h3>
+        <p class="standings-subtitle">A little friendly club rivalry — participation counts, not a performance ranking.</p>
+        <ul class="standings-list" id="club-standings-list"></ul>
+      </aside>
+    </div>
   </div>
-  <table>
-    <caption class="sr-only">Individual standings. Top {payoutPositions} are payout positions. {showScores ? 'Exact scores displayed.' : 'Exact scores withheld.'}</caption>
-    <thead id="leaderboard-head"><tr><th scope="col" class="rank">Rank</th><th scope="col">Player</th><th scope="col">Club</th>{showScores && <th scope="col" class="score">Score</th>}</tr></thead>
-    <tbody id="leaderboard-body">{players.map(player => <LeaderboardRow player={player} showScores={showScores} payoutPositions={payoutPositions} />)}</tbody>
-  </table>
-  <p class="table-footer">Equal totals share a rank. Final tie and payout decisions belong to the organizers.</p>
 </section>

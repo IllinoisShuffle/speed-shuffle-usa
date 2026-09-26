@@ -1,0 +1,21 @@
+---
+import { registrationUrl, tournamentConfig } from '../lib/config';
+
+const isFinal = tournamentConfig.stage === 'final';
+---
+<section class="closing-band">
+  <div class="shell closing-band-inner">
+    {isFinal ? (
+      <>
+        <h2 class="skew">Thanks for <span class="closing-accent">shuffling</span></h2>
+        <p>Prize winners will be contacted to arrange payment through Zelle. See you at next year's tournament.</p>
+      </>
+    ) : (
+      <>
+        <h2 class="skew">Ready to <span class="closing-accent">shuffle?</span></h2>
+        <p>Choose your home club on the registration page. The entry fee is $10.</p>
+        <a class="btn btn-primary" href={registrationUrl}>Register now</a>
+      </>
+    )}
+  </div>
+</section>

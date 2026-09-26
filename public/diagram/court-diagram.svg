@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="330" height="690" viewBox="-8 -12 88 184" role="img" aria-label="Shuffleboard scoring diagram with four discs in play">
+<defs>
+<linearGradient id="courtFade" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#1B5641" stop-opacity="0"></stop>
+<stop offset="0.07" stop-color="#1B5641" stop-opacity="1"></stop>
+<stop offset="0.93" stop-color="#1B5641" stop-opacity="1"></stop>
+<stop offset="1" stop-color="#1B5641" stop-opacity="0"></stop>
+</linearGradient>
+<linearGradient id="slide" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#F2C12E" stop-opacity="0"></stop>
+<stop offset="1" stop-color="#F2C12E" stop-opacity="0.45"></stop>
+</linearGradient>
+</defs>
+<rect x="0" y="-12" width="72" height="184" fill="url(#courtFade)"></rect>
+<polygon points="54.03,-12.44 37.03,102.56 42.97,103.44 59.97,-11.56" fill="url(#slide)"></polygon>
+<g fill="none" stroke="#F3EEE2" stroke-width="1" stroke-linejoin="miter" stroke-linecap="square">
+<line x1="0" y1="0" x2="72" y2="0"></line>
+<polygon points="36,36 70,144 2,144"></polygon>
+<polygon points="5.67,144 66.33,144 72,162 0,162"></polygon>
+<line x1="24.67" y1="72" x2="47.33" y2="72"></line>
+<line x1="13.33" y1="108" x2="58.67" y2="108"></line>
+<line x1="36" y1="72" x2="36" y2="162"></line>
+</g>
+<g font-family="Big Shoulders Display, sans-serif" font-weight="800" fill="#F3EEE2" fill-opacity="0.75" text-anchor="middle">
+<text x="36" y="60" font-size="9" dominant-baseline="central">10</text>
+<text x="27.19" y="92" font-size="10" dominant-baseline="central">8</text>
+<text x="44.81" y="92" font-size="10" dominant-baseline="central">8</text>
+<text x="21.64" y="127.2" font-size="10" dominant-baseline="central">7</text>
+<text x="50.36" y="127.2" font-size="10" dominant-baseline="central">7</text>
+<text x="19.38" y="153.26" font-size="7" dominant-baseline="central">10</text>
+<text x="52.62" y="153.26" font-size="7" dominant-baseline="central" letter-spacing="0.4">OFF</text>
+</g>
+<circle cx="40" cy="103" r="3" fill="#F2C12E"></circle><circle cx="40" cy="103" r="1.8" fill="none" stroke="#15181A" stroke-opacity="0.3" stroke-width="0.3"></circle><circle cx="41.2" cy="105.08" r="0.36" fill="#C99A0E"></circle><circle cx="37.92" cy="104.2" r="0.36" fill="#C99A0E"></circle><circle cx="38.8" cy="100.92" r="0.36" fill="#C99A0E"></circle><circle cx="42.08" cy="101.8" r="0.36" fill="#C99A0E"></circle>
+<circle cx="30" cy="80" r="3" fill="#15181A"></circle><circle cx="30" cy="80" r="1.8" fill="none" stroke="#F3EEE2" stroke-opacity="0.3" stroke-width="0.3"></circle><circle cx="31.2" cy="82.08" r="0.36" fill="#3A3F42"></circle><circle cx="27.92" cy="81.2" r="0.36" fill="#3A3F42"></circle><circle cx="28.8" cy="77.92" r="0.36" fill="#3A3F42"></circle><circle cx="32.08" cy="78.8" r="0.36" fill="#3A3F42"></circle>
+<circle cx="24" cy="139" r="3" fill="#F2C12E"></circle><circle cx="24" cy="139" r="1.8" fill="none" stroke="#15181A" stroke-opacity="0.3" stroke-width="0.3"></circle><circle cx="25.2" cy="141.08" r="0.36" fill="#C99A0E"></circle><circle cx="21.92" cy="140.2" r="0.36" fill="#C99A0E"></circle><circle cx="22.8" cy="136.92" r="0.36" fill="#C99A0E"></circle><circle cx="26.08" cy="137.8" r="0.36" fill="#C99A0E"></circle>
+<circle cx="64" cy="157" r="3" fill="#15181A"></circle><circle cx="64" cy="157" r="1.8" fill="none" stroke="#F3EEE2" stroke-opacity="0.3" stroke-width="0.3"></circle><circle cx="65.2" cy="159.08" r="0.36" fill="#3A3F42"></circle><circle cx="61.92" cy="158.2" r="0.36" fill="#3A3F42"></circle><circle cx="62.8" cy="154.92" r="0.36" fill="#3A3F42"></circle><circle cx="66.08" cy="155.8" r="0.36" fill="#3A3F42"></circle>
+</svg>

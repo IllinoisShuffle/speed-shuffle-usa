@@ -1,0 +1,21 @@
+---
+import ClubDirectoryRow from './ClubDirectoryRow.astro';
+import type { ClubStats } from '../lib/types';
+
+interface Props { stats: ClubStats[] }
+const { stats } = Astro.props;
+---
+<section class="section club-directory" id="clubs" aria-labelledby="clubs-directory-title">
+  <div class="shell">
+    <div class="section-head">
+      <div class="section-kicker">
+        <span class="eyebrow">Five clubs</span>
+        <h2 id="clubs-directory-title">Find your home club</h2>
+      </div>
+      <p>Entries are shot on your home courts during sessions your club schedules. Your club contact can answer questions about scheduling.</p>
+    </div>
+    <ul class="directory-list">
+      {stats.map(clubStats => <ClubDirectoryRow stats={clubStats} />)}
+    </ul>
+  </div>
+</section>

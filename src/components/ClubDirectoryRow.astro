@@ -1,0 +1,92 @@
+---
+import { clubsById, organizerNames, organizerLogos } from '../lib/clubs';
+import { clubContacts } from '../data/clubContacts';
+import { sessions as allSessions, sessionsUpdatedAt } from '../data/sessions';
+import { formatSessionDate, formatSessionTime, isUpcoming } from '../lib/format';
+import { tournamentConfig } from '../lib/config';
+import type { ClubStats } from '../lib/types';
+
+interface Props { stats: ClubStats }
+const { stats } = Astro.props;
+const club = clubsById[stats.clubId];
+const contact = clubContacts[club.id];
+const isFinal = tournamentConfig.stage === 'final';
+
+const upcoming = allSessions
+  .filter(session => session.clubId === club.id && isUpcoming(session.date))
+  .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
+const preview = upcoming.slice(0, 3);
+const overflow = upcoming.slice(3);
+---
+<li class="directory-row" data-club-card={club.id} style={`--club-color:${club.accentColor}`}>
+  <div class:list={['directory-logo-panel', `pattern-${club.panelPattern}`]} style={`background:${club.logoPanelBg}; --stripe-color:${club.stripeColor}`}>
+    <img src={`/club-logos/${club.logoFile}`} alt={`${club.name} logo`} height={club.logoHeightDesktop} class="directory-logo-img" />
+    {club.organizedBy && (
+      <span class="organizer-tile">
+        <img src={`/club-logos/${organizerLogos[club.organizedBy]}`} alt={club.organizedBy} />
+      </span>
+    )}
+  </div>
+
+  <div class="directory-body">
+    <div class="directory-info">
+      <h3>{club.name}</h3>
+      <p class="directory-location">{club.location}</p>
+      {club.organizedBy && <p class="directory-organized-by">Organized by {organizerNames[club.organizedBy]}</p>}
+    </div>
+
+    <div class="directory-sessions">
+      <p class="directory-label">Upcoming sessions</p>
+      {isFinal ? (
+        <p class="sessions-complete">All sessions complete</p>
+      ) : upcoming.length === 0 ? (
+        <div class="sessions-empty">
+          <p class="sessions-empty-title">None scheduled yet</p>
+          <p>Sessions will appear here as soon as the club posts them.</p>
+        </div>
+      ) : (
+        <>
+          <ul class="sessions-list" data-sessions-preview>
+            {preview.map(session => <li>{formatSessionDate(session.date)} <span class="session-time">{formatSessionTime(session.startTime, session.endTime)}</span></li>)}
+          </ul>
+          {overflow.length > 0 && (
+            <>
+              <ul class="sessions-list" data-sessions-overflow hidden>
+                {overflow.map(session => <li>{formatSessionDate(session.date)} <span class="session-time">{formatSessionTime(session.startTime, session.endTime)}</span></li>)}
+              </ul>
+              <button type="button" class="sessions-toggle" data-sessions-toggle aria-expanded="false">See all {upcoming.length} sessions</button>
+            </>
+          )}
+          {sessionsUpdatedAt && <p class="sessions-updated">Updated {formatSessionDate(sessionsUpdatedAt)}</p>}
+        </>
+      )}
+    </div>
+
+    <div class="directory-contact">
+      <p class="directory-label">Club contact</p>
+      {contact ? <a href={`mailto:${contact.email}`}>{contact.name}</a> : <p class="contact-pending">Contact coming soon</p>}
+    </div>
+
+    <div class="directory-counts">
+      <div class="directory-counts-numbers">
+        <span><strong data-registered>—</strong> registered</span>
+        <span><strong data-completed>—</strong> completed</span>
+      </div>
+      <progress value={stats.completed} max={Math.max(1, stats.registered)} aria-label={`${club.name}: ${stats.completed} of ${stats.registered} registered players completed`}></progress>
+    </div>
+  </div>
+</li>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-sessions-toggle]').forEach(button => {
+    button.addEventListener('click', () => {
+      const row = button.closest('.directory-row')!;
+      const overflow = row.querySelector<HTMLElement>('[data-sessions-overflow]')!;
+      const open = button.getAttribute('aria-expanded') !== 'true';
+      overflow.hidden = !open;
+      button.setAttribute('aria-expanded', String(open));
+      const total = row.querySelectorAll('[data-sessions-preview] li, [data-sessions-overflow] li').length;
+      button.textContent = open ? 'Show fewer' : `See all ${total} sessions`;
+    });
+  });
+</script>
