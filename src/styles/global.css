@@ -417,6 +417,8 @@ button { font: inherit; }
 .directory-info h3 { font-size: 1.05rem; text-transform: none; font-weight: 800; letter-spacing: 0; line-height: 1.15; }
 .directory-location { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
 .directory-organized-by { color: var(--muted); font-size: 0.78rem; margin-top: 6px; }
+.directory-organized-by a { color: var(--muted); font-weight: 600; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 2px; }
+.directory-organized-by a:hover { color: var(--accent-strong); text-decoration-color: currentColor; }
 .directory-website { display: inline-block; margin-top: 10px; color: var(--accent-strong); font-weight: 700; font-size: 0.82rem; text-decoration: none; }
 .directory-website:hover { text-decoration: underline; }
 

@@ -1,5 +1,5 @@
 ---
-import { clubsById, organizerNames, organizerLogos } from '../lib/clubs';
+import { clubsById, organizerNames, organizerLogos, organizerWebsites } from '../lib/clubs';
 import { clubContacts } from '../data/clubContacts';
 import { sessions as allSessions, sessionsUpdatedAt } from '../data/sessions';
 import { formatSessionDate, formatSessionTime, isUpcoming } from '../lib/format';
@@ -32,7 +32,11 @@ const overflow = upcoming.slice(3);
     <div class="directory-info">
       <h3>{club.name}</h3>
       <p class="directory-location">{club.location}</p>
-      {club.organizedBy && <p class="directory-organized-by">Organized by {organizerNames[club.organizedBy]}</p>}
+      {club.organizedBy && (
+        <p class="directory-organized-by">
+          Organized by <a href={organizerWebsites[club.organizedBy]} target="_blank" rel="noopener noreferrer">{organizerNames[club.organizedBy]}<span class="sr-only"> (opens in a new tab)</span></a>
+        </p>
+      )}
       <a class="directory-website" href={club.website} target="_blank" rel="noopener noreferrer">Club website<span class="sr-only"> (opens in a new tab)</span></a>
     </div>
 
