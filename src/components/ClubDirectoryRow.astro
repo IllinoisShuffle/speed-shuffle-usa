@@ -33,6 +33,7 @@ const overflow = upcoming.slice(3);
       <h3>{club.name}</h3>
       <p class="directory-location">{club.location}</p>
       {club.organizedBy && <p class="directory-organized-by">Organized by {organizerNames[club.organizedBy]}</p>}
+      <a class="directory-website" href={club.website} target="_blank" rel="noopener noreferrer">Club website<span class="sr-only"> (opens in a new tab)</span></a>
     </div>
 
     <div class="directory-sessions">
