@@ -406,8 +406,8 @@ button { font: inherit; }
 .directory-logo-panel { position: relative; width: 320px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .directory-logo-panel::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 5px; background: var(--stripe-color); }
 .directory-logo-img { max-height: 100%; width: auto; object-fit: contain; position: relative; z-index: 1; }
-.organizer-tile { position: absolute; right: 16px; bottom: 16px; z-index: 1; background: #fff; border-radius: 8px; padding: 4px 6px; display: flex; align-items: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
-.organizer-tile img { height: 22px; width: auto; display: block; }
+.organizer-tile { position: absolute; right: 16px; bottom: 16px; z-index: 1; background: #fff; border-radius: 8px; padding: 6px 9px; display: flex; align-items: center; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
+.organizer-tile img { height: 32px; width: auto; display: block; }
 .pattern-vertical::before { content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.06) 0 2px, transparent 2px 14px); }
 .pattern-horizontal::before { content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.05) 0 1px, transparent 1px 10px); }
 .pattern-diagonal::before { content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(45deg, rgba(197, 165, 66, 0.18) 0 2px, transparent 2px 16px); }
