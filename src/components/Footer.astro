@@ -30,7 +30,7 @@ const organizers: Array<'ILSA' | 'NYSA'> = ['ILSA', 'NYSA'];
         <p class="footer-logo-label">Host clubs</p>
         <div class="footer-logo-row">
           {clubs.map(club => (
-            <span class="footer-logo-tile"><img src={`/club-logos/${club.logoFile}`} alt={club.name} /></span>
+            <span class="footer-logo-tile" style={`background:${club.logoPanelBg}`}><img src={`/club-logos/${club.logoFile}`} alt={club.name} /></span>
           ))}
         </div>
       </div>
