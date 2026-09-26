@@ -14,6 +14,7 @@ export const clubs = [
     labelTextColor: '#1D1A17',
     logoFile: 'logo-royal-palms-chicago.png',
     logoHeightDesktop: 92,
+    website: 'https://www.royalpalmschicago.com/',
   },
   {
     id: 'brooklyn',
@@ -28,6 +29,7 @@ export const clubs = [
     labelTextColor: '#1D1A17',
     logoFile: 'logo-royal-palms-brooklyn.png',
     logoHeightDesktop: 92,
+    website: 'https://www.royalpalmsbrooklyn.com/',
   },
   {
     id: 'st-pete',
@@ -42,6 +44,7 @@ export const clubs = [
     labelTextColor: '#F5EFDF',
     logoFile: 'logo-st-petersburg-shuffleboard-club.png',
     logoHeightDesktop: 76,
+    website: 'https://stpeteshuffle.com/',
   },
   {
     id: 'tampa',
@@ -56,6 +59,7 @@ export const clubs = [
     labelTextColor: '#111111',
     logoFile: 'logo-tampa-shuffle.png',
     logoHeightDesktop: 88,
+    website: 'https://shuffletampa.com/',
   },
   {
     id: 'beachside',
@@ -70,6 +74,7 @@ export const clubs = [
     labelTextColor: '#0F3347',
     logoFile: 'logo-beachside-social.png',
     logoHeightDesktop: 100,
+    website: 'https://beachsidesocialvb.com/',
   },
 ] as const satisfies readonly Club[];
 

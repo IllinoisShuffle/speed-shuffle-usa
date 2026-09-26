@@ -21,6 +21,8 @@ export interface Club {
   /** Filename under /club-logos/. */
   logoFile: string;
   logoHeightDesktop: number;
+  /** The club's own website. */
+  website: string;
 }
 
 export interface PlayerStanding {
