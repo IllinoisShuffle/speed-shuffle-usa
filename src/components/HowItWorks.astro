@@ -1,0 +1,28 @@
+---
+const steps = [
+  { title: 'Register', body: 'Pick your home club and get your ticket on the registration page. One ticket per person.' },
+  { title: 'Show up', body: 'Each club schedules sessions for shooting official entries. Find yours in the club directory.' },
+  { title: 'Shoot 4 frames', body: 'Play 4 frames of speed shuffle in a row on the same court. The first disc of each frame is a practice shot.' },
+  { title: 'Chase the top 10', body: 'Your 28 scored discs are added up and ranked against every player at every club. The top 10 get paid.' },
+];
+---
+<section class="section how-it-works" id="how-it-works" aria-labelledby="how-it-works-title">
+  <div class="shell">
+    <div class="section-head">
+      <div class="section-kicker">
+        <span class="eyebrow">Play at home. Compete nationally.</span>
+        <h2 id="how-it-works-title">How it works</h2>
+      </div>
+      <p>Speed Shuffle Across the USA brings shuffleboard clubs across the country together. You play locally on your home courts, and your score goes onto one leaderboard shared by all five clubs.</p>
+    </div>
+    <ol class="steps-grid">
+      {steps.map((step, index) => (
+        <li class="card step-card">
+          <span class="step-number">{String(index + 1).padStart(2, '0')}</span>
+          <h3>{step.title}</h3>
+          <p>{step.body}</p>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>

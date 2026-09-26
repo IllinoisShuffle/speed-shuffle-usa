@@ -1,11 +1,86 @@
-import type { Club, ClubId } from './types';
+import type { Club, ClubId, OrganizerId } from './types';
 
 export const clubs = [
-  { id: 'chicago', name: 'Palms / Chicago', shortName: 'Chicago', location: 'Illinois', color: '#4F46E5' },
-  { id: 'brooklyn', name: 'Brooklyn', shortName: 'Brooklyn', location: 'New York', color: '#EC4899' },
-  { id: 'st-pete', name: 'St. Pete', shortName: 'St. Pete', location: 'Florida', color: '#10B981' },
-  { id: 'tampa', name: 'Tampa', shortName: 'Tampa', location: 'Florida', color: '#F59E0B' },
-  { id: 'beachside', name: 'Beachside Social', shortName: 'Beachside Social', location: 'Virginia Beach', color: '#06B6D4' },
+  {
+    id: 'chicago',
+    name: 'Royal Palms Chicago',
+    shortName: 'RP Chicago',
+    location: 'Chicago, IL',
+    organizedBy: 'ILSA',
+    logoPanelBg: '#9ED9D6',
+    panelPattern: 'vertical',
+    stripeColor: '#EA5D35',
+    accentColor: '#9ED9D6',
+    labelTextColor: '#1D1A17',
+    logoFile: 'logo-royal-palms-chicago.png',
+    logoHeightDesktop: 92,
+  },
+  {
+    id: 'brooklyn',
+    name: 'Royal Palms Brooklyn',
+    shortName: 'RP Brooklyn',
+    location: 'Brooklyn, NY',
+    organizedBy: 'NYSA',
+    logoPanelBg: '#9ED9D6',
+    panelPattern: 'vertical',
+    stripeColor: '#EA5D35',
+    accentColor: '#EA5D35',
+    labelTextColor: '#1D1A17',
+    logoFile: 'logo-royal-palms-brooklyn.png',
+    logoHeightDesktop: 92,
+  },
+  {
+    id: 'st-pete',
+    name: 'St. Petersburg Shuffleboard Club',
+    shortName: 'St Petersburg',
+    location: 'St. Petersburg, FL',
+    organizedBy: null,
+    logoPanelBg: '#F5EFDF',
+    panelPattern: 'horizontal',
+    stripeColor: '#305025',
+    accentColor: '#305025',
+    labelTextColor: '#F5EFDF',
+    logoFile: 'logo-st-petersburg-shuffleboard-club.png',
+    logoHeightDesktop: 76,
+  },
+  {
+    id: 'tampa',
+    name: 'Tampa Shuffle',
+    shortName: 'Tampa Shuffle',
+    location: 'Tampa, FL',
+    organizedBy: null,
+    logoPanelBg: '#111111',
+    panelPattern: 'diagonal',
+    stripeColor: '#C5A542',
+    accentColor: '#C5A542',
+    labelTextColor: '#111111',
+    logoFile: 'logo-tampa-shuffle.png',
+    logoHeightDesktop: 88,
+  },
+  {
+    id: 'beachside',
+    name: 'Beachside Social',
+    shortName: 'Beachside Social',
+    location: 'Virginia Beach, VA',
+    organizedBy: null,
+    logoPanelBg: '#FBEEE7',
+    panelPattern: 'none',
+    stripeColor: '#F29A8A',
+    accentColor: '#F29A8A',
+    labelTextColor: '#0F3347',
+    logoFile: 'logo-beachside-social.png',
+    logoHeightDesktop: 100,
+  },
 ] as const satisfies readonly Club[];
 
 export const clubsById = Object.fromEntries(clubs.map(club => [club.id, club])) as Record<ClubId, Club>;
+
+export const organizerNames: Record<OrganizerId, string> = {
+  ILSA: 'the Illinois Shuffleboard Association',
+  NYSA: 'the New York Shuffleboard Association',
+};
+
+export const organizerLogos: Record<OrganizerId, string> = {
+  ILSA: 'org-ilsa.png',
+  NYSA: 'org-nysa.png',
+};

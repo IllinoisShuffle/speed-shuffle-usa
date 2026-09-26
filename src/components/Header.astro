@@ -1,12 +1,65 @@
+---
+import Logo from './Logo.astro';
+import { registrationUrl, tournamentConfig } from '../lib/config';
+
+const navLinks = [
+  { href: '#how-it-works', label: 'How it works' },
+  { href: '#prizes', label: 'Prizes' },
+  { href: '#clubs', label: 'Clubs' },
+  { href: '#leaderboard', label: 'Leaderboard' },
+  { href: '#rules', label: 'Rules' },
+  { href: '#contact', label: 'Contact' },
+];
+
+const isFinal = tournamentConfig.stage === 'final';
+const headerCta = isFinal
+  ? { href: '#winners', label: 'Results →' }
+  : { href: registrationUrl, label: 'Register →' };
+---
 <header class="site-header">
-  <div class="shell">
-    <div class="brand-line">
-      <a class="brand" href="/" aria-label="Speed Shuffling Across the USA home">
-        <img src="/favicon.svg" width="40" height="40" alt="" />
-        <span>Illinois Shuffleboard Association</span>
-      </a>
-      <span class="event-date">October 2026</span>
-    </div>
-    <p class="header-title">Speed Shuffling Across the USA</p>
+  <div class="shell header-row">
+    <a class="brand" href="/" aria-label="Speed Shuffling Across the USA home">
+      <Logo size={40} />
+      <span class="wordmark skew"><span class="wordmark-speed">SPEED</span> SHUFFLE USA</span>
+    </a>
+
+    <nav class="site-nav" aria-label="Primary">
+      <ul>
+        {navLinks.map(link => <li><a href={link.href}>{link.label}</a></li>)}
+      </ul>
+    </nav>
+
+    <a class="btn btn-primary header-cta" href={headerCta.href}>{headerCta.label}</a>
+
+    <button type="button" class="menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="mobile-menu">
+      <span class="menu-icon" aria-hidden="true"></span>
+      <span class="menu-toggle-label">Menu</span>
+    </button>
+  </div>
+
+  <div class="mobile-menu" id="mobile-menu" hidden>
+    <ul>
+      {isFinal && <li><a href="#winners">Winners</a></li>}
+      {navLinks.map(link => <li><a href={link.href}>{link.label}</a></li>)}
+    </ul>
+    <a class="btn btn-primary" href={headerCta.href}>{headerCta.label === 'Results →' ? headerCta.label : 'Register'}</a>
+    <a class="mobile-menu-email" href="mailto:speedshuffle@illinoisshuffleboard.org">speedshuffle@illinoisshuffleboard.org</a>
   </div>
 </header>
+
+<script>
+  const toggle = document.querySelector<HTMLButtonElement>('#menu-toggle')!;
+  const menu = document.querySelector<HTMLElement>('#mobile-menu')!;
+  const label = toggle.querySelector('.menu-toggle-label')!;
+
+  function setOpen(open: boolean) {
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.classList.toggle('is-open', open);
+    menu.hidden = !open;
+    label.textContent = open ? 'Close menu' : 'Menu';
+    document.body.classList.toggle('menu-open', open);
+  }
+
+  toggle.addEventListener('click', () => setOpen(toggle.getAttribute('aria-expanded') !== 'true'));
+  menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => setOpen(false)));
+</script>
