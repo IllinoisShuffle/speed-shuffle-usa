@@ -1,7 +1,7 @@
 # Speed Shuffling Across the USA
 
 Live Google Sheets-backed leaderboard for the October 2026 tournament.
-**Technical lead: Nick. Assisting contributor: John Allen.**
+**Technical contributors: Nick Haynes and John Allen.**
 
 ## Open in Cursor and run
 
