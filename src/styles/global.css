@@ -303,7 +303,7 @@ button { font: inherit; }
 
 /* Hero */
 .hero { background: var(--hero); color: var(--hero-ink); padding-block: clamp(48px, 8vw, 96px) clamp(56px, 9vw, 108px); }
-.hero-grid { display: flex; align-items: center; gap: 28px; }
+.hero-grid { display: flex; align-items: center; gap: 64px; }
 .hero-copy { flex: 0 1 auto; max-width: 640px; min-width: 0; }
 .hero-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
 .hero-subline { color: var(--hero-muted); font-size: 14px; font-weight: 600; }
