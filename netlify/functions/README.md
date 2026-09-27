@@ -11,6 +11,9 @@ mistaken for deployable functions. Public mode is for a link-accessible syntheti
 test sheet; private mode uses a Google service account with read-only Sheets scope.
 Configuration and sheet layout are documented in the root README and `.env.example`.
 
-`tito-webhook` is still future work. It will verify Tito events and idempotently
-update club sheets by a stable ticket/attendee ID, preserving manually entered
-scores. No webhook handler or write credential exists in this implementation.
+There is no `tito-webhook` Netlify function, and none is planned here: Tito
+registration ingest is handled outside this repo by a Google Apps Script Web
+App bound to the ADMIN master sheet, which verifies Tito events and
+idempotently upserts rows by `registration_id`, preserving manually entered
+scores. See `google-apps-script/registration-sync/` at the repo root for a
+mirrored copy of that script and how to test it end-to-end.
