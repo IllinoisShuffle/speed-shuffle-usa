@@ -68,6 +68,9 @@ var COL = {
   REG_ID: 12
 };
 
+var INGEST_ERROR_SHEET = 'Ingest Errors';
+var LOCK_WAIT_MS = 30000;
+
 var CLUBS = [
   {
     id: 'beachside',
@@ -580,6 +583,26 @@ function protectRange_(
    ========================================================= */
 
 function syncFromClubsNow() {
+  /*
+   * Shared with addRegistration() so a Tito webhook mid-write
+   * can't interleave with this sync and corrupt a row.
+   */
+  var lock =
+    LockService.getScriptLock();
+
+  lock.waitLock(
+    LOCK_WAIT_MS
+  );
+
+  try {
+    syncFromClubsNow_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function syncFromClubsNow_() {
   var master =
     ensureMasterSheet_();
 
@@ -887,46 +910,61 @@ function addRegistration(
     );
   }
 
-  var master =
-    ensureMasterSheet_();
+  /*
+   * Shared with syncFromClubsNow() so a club sync mid-run
+   * can't interleave with this write and corrupt a row.
+   */
+  var lock =
+    LockService.getScriptLock();
 
-  var clubSheet =
-    ensureClubPlayersSheet_(
-      clubId
-    );
+  lock.waitLock(
+    LOCK_WAIT_MS
+  );
 
-  var rowValues =
-    buildRegistrationRowValues_(
-      registration,
-      clubId
-    );
+  try {
+    var master =
+      ensureMasterSheet_();
 
-  var masterRow =
-    upsertRegistrationRow_(
-      master,
-      rowValues,
-      true
-    );
+    var clubSheet =
+      ensureClubPlayersSheet_(
+        clubId
+      );
 
-  var clubRow =
-    upsertRegistrationRow_(
-      clubSheet,
-      rowValues,
-      false
-    );
+    var rowValues =
+      buildRegistrationRowValues_(
+        registration,
+        clubId
+      );
 
-  SpreadsheetApp.flush();
+    var masterRow =
+      upsertRegistrationRow_(
+        master,
+        rowValues,
+        true
+      );
 
-  return {
-    registration_id:
-      registrationId,
-    club:
-      clubId,
-    master_row:
-      masterRow,
-    club_row:
-      clubRow
-  };
+    var clubRow =
+      upsertRegistrationRow_(
+        clubSheet,
+        rowValues,
+        false
+      );
+
+    SpreadsheetApp.flush();
+
+    return {
+      registration_id:
+        registrationId,
+      club:
+        clubId,
+      master_row:
+        masterRow,
+      club_row:
+        clubRow
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 
@@ -1201,17 +1239,39 @@ function mapTitoPayloadToRegistration_(
 }
 
 
+/*
+ * Apps Script Web Apps always answer HTTP 200, regardless of what
+ * doPost returns — there is no way to make Tito's own webhook retry
+ * trigger on failure. ensureIngestErrorSheet_ / notifyIngestFailure_
+ * below are the substitute: a durable, human-visible record of any
+ * registration that failed to apply, so it can be replayed by hand.
+ */
 function doPost(e) {
+  var contents =
+    e &&
+    e.postData &&
+    e.postData.contents
+      ? e.postData.contents
+      : '{}';
+
   try {
     assertIngestToken_(e);
+  } catch (authErr) {
+    /*
+     * Unauthorized requests are not logged/emailed: the public
+     * webhook URL will draw scanner noise, and attacker-supplied
+     * bodies shouldn't get written into a tournament sheet.
+     */
+    return jsonResponse_({
+      ok: false,
+      error: String(
+        authErr.message ||
+        authErr
+      )
+    });
+  }
 
-    var contents =
-      e &&
-      e.postData &&
-      e.postData.contents
-        ? e.postData.contents
-        : '{}';
-
+  try {
     var payload =
       JSON.parse(contents);
 
@@ -1239,6 +1299,16 @@ function doPost(e) {
     });
 
   } catch (err) {
+    logIngestError_(
+      contents,
+      err
+    );
+
+    notifyIngestFailure_(
+      contents,
+      err
+    );
+
     return jsonResponse_({
       ok: false,
       error: String(
@@ -1246,6 +1316,110 @@ function doPost(e) {
         err
       )
     });
+  }
+}
+
+
+function ensureIngestErrorSheet_() {
+  var ss =
+    SpreadsheetApp
+      .getActiveSpreadsheet();
+
+  var sheet =
+    ss.getSheetByName(
+      INGEST_ERROR_SHEET
+    );
+
+  if (!sheet) {
+    sheet =
+      ss.insertSheet(
+        INGEST_ERROR_SHEET
+      );
+
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        3
+      )
+      .setValues([[
+        'timestamp',
+        'error',
+        'payload'
+      ]]);
+  }
+
+  return sheet;
+}
+
+
+function logIngestError_(
+  rawContents,
+  err
+) {
+  try {
+    ensureIngestErrorSheet_()
+      .appendRow([
+        new Date(),
+        String(
+          (err && err.message) ||
+          err
+        ),
+        String(
+          rawContents || ''
+        ).slice(0, 5000)
+      ]);
+  } catch (loggingErr) {
+    Logger.log(
+      'Failed to log ingest error: ' +
+      loggingErr
+    );
+  }
+}
+
+
+/*
+ * Optional: set the INGEST_ALERT_EMAIL script property to get a
+ * mail notification per failed ingest. Left unset, failures are
+ * still recorded in the Ingest Errors sheet — someone just has to
+ * go look. Wrapped in its own try/catch so a mail-quota error can
+ * never mask the original ingest failure.
+ */
+function notifyIngestFailure_(
+  rawContents,
+  err
+) {
+  try {
+    var alertEmail =
+      PropertiesService
+        .getScriptProperties()
+        .getProperty(
+          'INGEST_ALERT_EMAIL'
+        );
+
+    if (!alertEmail) {
+      return;
+    }
+
+    MailApp.sendEmail(
+      alertEmail,
+      'Speed Shuffle: Tito registration ingest failed',
+      'Error: ' +
+      String(
+        (err && err.message) ||
+        err
+      ) +
+      '\n\nPayload:\n' +
+      String(
+        rawContents || ''
+      ).slice(0, 5000)
+    );
+  } catch (mailErr) {
+    Logger.log(
+      'Failed to send ingest failure email: ' +
+      mailErr
+    );
   }
 }
 
