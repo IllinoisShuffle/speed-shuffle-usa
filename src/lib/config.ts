@@ -20,7 +20,7 @@ export const tournamentConfig = {
 };
 
 export const registrationUrl = 'https://ti.to/ilsa/speedshuffle2026';
-export const tournamentContactEmail = 'speedshuffle@illinoisshuffleboard.org';
+export const tournamentContactEmail = 'USAspeed@illinoisshuffleboard.org';
 
 // Pending content (HANDOFF.md §12): real dates arrive before launch.
 export const tournamentDates = {

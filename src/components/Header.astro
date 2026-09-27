@@ -1,6 +1,6 @@
 ---
 import Logo from './Logo.astro';
-import { registrationUrl, tournamentConfig } from '../lib/config';
+import { registrationUrl, tournamentConfig, tournamentContactEmail } from '../lib/config';
 
 const navLinks = [
   { href: '#how-it-works', label: 'How it works' },
@@ -43,7 +43,7 @@ const headerCta = isFinal
       {navLinks.map(link => <li><a href={link.href}>{link.label}</a></li>)}
     </ul>
     <a class="btn btn-primary" href={headerCta.href}>{headerCta.label === 'Results →' ? headerCta.label : 'Register'}</a>
-    <a class="mobile-menu-email" href="mailto:speedshuffle@illinoisshuffleboard.org">speedshuffle@illinoisshuffleboard.org</a>
+    <a class="mobile-menu-email" href={`mailto:${tournamentContactEmail}`}>{tournamentContactEmail}</a>
   </div>
 </header>
 
