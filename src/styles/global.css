@@ -227,7 +227,7 @@ button { font: inherit; }
 
 /* Header */
 .site-header { background: var(--hero); position: relative; z-index: 30; }
-.header-row { display: flex; align-items: center; gap: 24px; padding-block: 18px; }
+.header-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-block: 18px; }
 .brand { display: flex; align-items: center; gap: 4px; text-decoration: none; color: var(--hero-ink); flex-shrink: 0; }
 .wordmark { font-family: var(--font-display); font-weight: 900; text-transform: uppercase; font-size: 1.05rem; letter-spacing: -0.01em; white-space: nowrap; }
 .wordmark-speed { color: var(--accent); }
