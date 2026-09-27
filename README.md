@@ -132,11 +132,15 @@ Nick can deploy his fork on his paid Netlify account when ready. Set the chosen
 Google environment variables in that site's function environment. Nothing has been
 pushed, linked, or deployed by this implementation.
 
-Tito is not implemented. Lauren can create her own test sheets using the same
-layout; the application is not dependent on her sheet setup. Club-sheet-to-master
-aggregation, production Google permissions, final tie/payout rules, and the later
-Tito webhook remain separate work. Proctors still record on paper and enter four
-end scores in their own Google Sheet afterward.
+Tito registration ingest and club-sheet-to-master aggregation are implemented,
+but outside this repo: a Google Apps Script project bound to the ADMIN master
+sheet runs a `doPost` webhook that Tito calls on ticket events, plus a 1-minute
+club→master sync trigger. See `google-apps-script/registration-sync/` for a
+mirrored copy of that source and how it works. Lauren can still create her own
+test sheets using the same layout; the application is not dependent on her sheet
+setup. Production Google permissions and final tie/payout rules remain separate
+work. Proctors still record on paper and enter four end scores in their own
+Google Sheet afterward.
 
 ## Verification
 
