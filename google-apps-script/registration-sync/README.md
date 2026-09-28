@@ -23,16 +23,45 @@ Three responsibilities live in one script:
    and the identity/total/registration columns stay locked.
 2. **Club → Master sync** (`syncFromClubsNow`, installed on a 1-minute
    time trigger via `installOneMinuteSyncTrigger`) — matches club sheet rows to
-   MASTER rows by `registration_id` (column L), copies `attempt_status` and the
-   four end scores, and auto-checks `public_display` the first time a row
-   transitions to `completed`. It never copies `public_display` from a club
-   sheet, so a manual uncheck by Lauren on MASTER sticks.
+   MASTER rows by `registration_id`, copies `attempt_status` and the four end
+   scores, and auto-checks `public_display` the first time a row transitions to
+   `completed`. It never copies `public_display` from a club sheet, so a manual
+   uncheck by Lauren on MASTER sticks.
 3. **Tito registration ingest** (`doPost`, `mapTitoPayloadToRegistration_`,
    `addRegistration`) — the actual Tito integration. A Tito webhook posts ticket
    events to this script's deployed Web App URL; the handler verifies a shared
    token, maps the Tito ticket JSON to this project's registration shape, and
    upserts one row into both the MASTER sheet and the matching club sheet,
    keyed on `registration_id`.
+
+## Column resolution
+
+Every read/write in the sync and ingest paths looks up each of the 12 required
+column headers (`first_name`, `last_initial`, `club`, `registered_at`,
+`attempt_status`, `end_1_score`…`end_4_score`, `total_score`, `public_display`,
+`registration_id`) **by name**, via `resolveColumns_(sheet)`, instead of
+assuming fixed letters. This was the fix for a real fragility: previously every
+function referenced hardcoded column numbers, so a club admin inserting,
+deleting, or reordering a column on their own sheet would silently misalign
+every downstream read/write with no error — wrong data landing in the wrong
+field, both on that club's sheet and (once synced) on MASTER.
+
+As a result:
+
+- **Reordering columns, or adding extra ones anywhere, is safe.** A club can
+  add a "team name" column, or have their 12 required headers in a different
+  order than MASTER, and ingest/sync still find the right column each time.
+- **Renaming, deleting, or duplicating a required header is not silently
+  tolerated — it fails loudly instead.** `resolveColumns_` throws a specific
+  "missing header X" / "duplicate header X" error naming the sheet, which
+  flows into the same failure path described below (logged to `System Errors`,
+  optionally emailed) rather than writing to the wrong column.
+- **`prepareAllSheets` (the repair tool) is stricter on purpose**: it requires
+  the canonical A:L order exactly (`assertCanonicalColumnOrder_`) and refuses
+  to touch a sheet that's missing a header or already out of canonical order,
+  rather than guessing how to reformat it. It also bootstraps the canonical
+  header row on a sheet whose row 1 is completely blank (new sheet setup), but
+  never overwrites an existing row 1.
 
 `addRegistration` and `syncFromClubsNow` each hold `LockService.getScriptLock()`
 for the duration of their read-modify-write work (find-or-create row, then
@@ -73,22 +102,30 @@ cover.
 - **Failure visibility**: Apps Script Web Apps always answer HTTP 200 to
   `doPost`, no matter what the handler returns — there is no way to make
   Tito's own webhook delivery retry on failure. Instead, any error while
-  processing an *authenticated* request (bad club mapping, sheet full, etc.)
-  is appended to an `Ingest Errors` sheet tab in the ADMIN workbook
-  (timestamp, error, raw payload) via `logIngestError_`, and optionally
-  emailed via `notifyIngestFailure_` if `INGEST_ALERT_EMAIL` is set. A failed
-  registration must be noticed and replayed by hand (e.g. re-running
-  `addRegistration` with the logged payload, or asking Tito to resend the
-  event) — nothing retries it automatically. Unauthorized requests (bad/missing
-  token) are neither logged nor emailed, to avoid filling the error sheet with
-  scanner noise from the public webhook URL.
+  processing an *authenticated* request (bad club mapping, broken headers,
+  sheet full, etc.) is appended to a `System Errors` sheet tab in the ADMIN
+  workbook (timestamp, source, error, raw payload) via `logSystemError_`, and
+  optionally emailed via `notifySystemFailure_` if `INGEST_ALERT_EMAIL` is
+  set. The same sheet and helpers are also used by `syncFromClubsNow` (see
+  below), distinguished by the `source` column (`tito_ingest` vs
+  `club_sync`/`club_sync:<club id>`). A failed registration must be noticed
+  and replayed by hand (e.g. re-running `addRegistration` with the logged
+  payload, or asking Tito to resend the event) — nothing retries it
+  automatically. Unauthorized requests (bad/missing token) are neither logged
+  nor emailed, to avoid filling the error sheet with scanner noise from the
+  public webhook URL.
+- **A broken club doesn't take down the others.** If one club sheet's headers
+  are broken, `syncFromClubsNow` logs it (`club_sync:<club id>`) and skips
+  just that club, continuing the sync for the remaining four. If MASTER's own
+  headers are broken, the whole sync aborts and logs once (`club_sync`) —
+  there's nothing useful it can do without a working MASTER sheet.
 
 ## Required Script Properties
 
 | Property | Purpose |
 | --- | --- |
 | `REGISTRATION_INGEST_TOKEN` | Shared secret the Tito webhook must send as `?token=` on the POST URL. Rotate by changing this and updating Tito's configured webhook URL together. |
-| `INGEST_ALERT_EMAIL` | Optional. If set, a failed *authenticated* ingest sends an email here in addition to the `Ingest Errors` sheet row. Leave unset to rely on the sheet alone. |
+| `INGEST_ALERT_EMAIL` | Optional. If set, a failed *authenticated* ingest or club sync sends an email here in addition to the `System Errors` sheet row. Leave unset to rely on the sheet alone. |
 
 ## End-to-end test
 
@@ -119,17 +156,27 @@ and clean up the row afterward.
    with a voided/cancelled ticket state (expect `attempt_status: 'cancelled'`
    with no `public_display` change).
 5. **Failure path** — confirm the unknown-club case from step 4 also appended
-   a row to the `Ingest Errors` sheet tab in the ADMIN workbook (create it
-   first if this is the first failure ever recorded), and, if
-   `INGEST_ALERT_EMAIL` is set, that the email arrived. This is what you're
-   actually relying on in place of Tito-level retries — worth confirming it
-   works before the tournament, not after a registration goes missing.
-6. **Cleanup** — delete the test row(s) from MASTER and the affected club
-   sheet (or clear `L` on those rows) so test data doesn't linger in the
-   scoring system. `FIX_uncheckAllClubPublicDisplay` and
+   a row to the `System Errors` sheet tab in the ADMIN workbook (create it
+   first if this is the first failure ever recorded; `source` should read
+   `tito_ingest`), and, if `INGEST_ALERT_EMAIL` is set, that the email
+   arrived. This is what you're actually relying on in place of Tito-level
+   retries — worth confirming it works before the tournament, not after a
+   registration goes missing.
+6. **Column drift** — on a *test copy* of a club sheet (never a live one),
+   reorder a couple of columns (e.g. swap `total_score` and `public_display`)
+   and confirm `TEST_titoBrooklynTicket`-style ingest still lands in the right
+   fields (check by header, not by letter). Then rename or delete one required
+   header (e.g. `attempt_status` → `status`) and confirm the next ingest/sync
+   attempt fails with a clear "missing required header" error in `System
+   Errors`, rather than writing anything. Restore the header name afterward —
+   this step is about confirming the *failure mode*, not leaving the test copy
+   broken.
+7. **Cleanup** — delete the test row(s) from MASTER and the affected club
+   sheet (or clear their `registration_id` cell) so test data doesn't linger
+   in the scoring system. `FIX_uncheckAllClubPublicDisplay` and
    `normalizeMasterPublicDisplay` are one-time fixups, not part of routine
    cleanup — don't run them just to remove test rows.
-7. **Regression check** — run `verifySystem` afterward to confirm headers on
+8. **Regression check** — run `verifySystem` afterward to confirm headers on
    MASTER and all five club sheets are still intact and exactly one
    `syncFromClubsNow` trigger is installed (test runs don't touch triggers, but
    it's a cheap sanity check after poking at the sheets by hand).
@@ -142,14 +189,22 @@ editor to skip the wait).
 
 ## Outstanding risks
 
-Locking and error-logging (this revision) close the worst correctness and
-silent-failure gaps, but the underlying architecture still has real limits
-worth knowing about rather than discovering during the tournament:
+Locking, error-logging, and header-name column resolution (this revision)
+close the worst correctness and silent-failure gaps, but the underlying
+architecture still has real limits worth knowing about rather than
+discovering during the tournament:
 
 - **No true webhook retry.** As above: Apps Script Web Apps can't return a
   non-200 status, so Tito can never know an ingest failed and cannot retry it
-  for us. The `Ingest Errors` sheet and `INGEST_ALERT_EMAIL` turn "silently
+  for us. The `System Errors` sheet and `INGEST_ALERT_EMAIL` turn "silently
   lost" into "visible, but still requires a human to replay it by hand."
+- **Column reordering/renaming is handled; a genuinely malformed sheet still
+  needs a human.** `resolveColumns_` makes ingest/sync tolerant of columns
+  being reordered or extra columns being added, and turns a missing/duplicate
+  required header into a loud, logged failure instead of silent data
+  corruption. It does not — and can't — guess what a renamed or deleted header
+  was supposed to be; that still requires someone to notice the `System
+  Errors` entry and fix the sheet by hand.
 - **Lock timeouts fail closed, not gracefully.** `waitLock(30000)` throws if
   the lock isn't free within 30 seconds. Under sustained high concurrency
   (unlikely at this event's scale, but not impossible during a registration
