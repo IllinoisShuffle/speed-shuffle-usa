@@ -2,7 +2,8 @@
  * Speed Shuffle — Score Tracking System
  * Bound to: ADMIN - Speed Shuffle Score Tracker
  *
- * COLUMN ORDER:
+ * CANONICAL COLUMN ORDER (what "Prepare / Repair All Sheets" lays down
+ * on a fresh or reset sheet):
  * A first_name
  * B last_initial
  * C club
@@ -20,11 +21,22 @@
  *
  * Club admins edit only E:I.
  *
+ * COLUMN RESOLUTION: every read/write in the Tito ingest and
+ * club↔master sync paths looks up each of the 12 header names above by
+ * text, via resolveColumns_(), rather than assuming the letters above.
+ * A sheet whose columns have been reordered, or that has extra columns
+ * added elsewhere, still works. A sheet that is missing one of the 12
+ * names (typo, deletion, accidental overwrite) fails loudly — the
+ * write is refused and logged to the "System Errors" sheet instead of
+ * silently landing in the wrong column. "Prepare / Repair All Sheets"
+ * is stricter: it requires the canonical A:L order exactly, and stops
+ * with an alert rather than reformatting a sheet that's out of order.
+ *
  * Club → Master sync:
- * - matched by registration_id in L
- * - copies E:I
- * - Master J recalculates
- * - K is NEVER copied from clubs
+ * - matched by registration_id
+ * - copies attempt_status + the four end scores
+ * - Master total_score recalculates
+ * - public_display is NEVER copied from clubs
  *
  * Public display behavior:
  * - new registration = unchecked
@@ -42,10 +54,13 @@ var SS_MENU = 'Speed Shuffle';
 
 var MASTER_SHEET = 'MASTER';
 var CLUB_DATA_SHEET = 'Players';
+var SYSTEM_ERROR_SHEET = 'System Errors';
 
 var PREFORMAT_ROWS = 1000;
 var LAST_DATA_ROW = 1000;
 var DATA_ROWS = LAST_DATA_ROW - 1; // rows 2:1000
+
+var LOCK_WAIT_MS = 30000;
 
 var STATUS_VALUES = [
   'registered',
@@ -53,23 +68,41 @@ var STATUS_VALUES = [
   'cancelled'
 ];
 
-var COL = {
-  FIRST: 1,
-  LAST: 2,
-  CLUB: 3,
-  REGISTERED: 4,
-  STATUS: 5,
-  E1: 6,
-  E2: 7,
-  E3: 8,
-  E4: 9,
-  TOTAL: 10,
-  PUBLIC: 11,
-  REG_ID: 12
-};
+/*
+ * Parallel arrays: HEADER_ORDER[i] is the exact header text sheets
+ * must contain somewhere in row 1; HEADER_KEYS[i] is the logical name
+ * used everywhere else in this script to refer to it, independent of
+ * its actual column letter.
+ */
+var HEADER_ORDER = [
+  'first_name',
+  'last_initial',
+  'club',
+  'registered_at',
+  'attempt_status',
+  'end_1_score',
+  'end_2_score',
+  'end_3_score',
+  'end_4_score',
+  'total_score',
+  'public_display',
+  'registration_id'
+];
 
-var INGEST_ERROR_SHEET = 'Ingest Errors';
-var LOCK_WAIT_MS = 30000;
+var HEADER_KEYS = [
+  'FIRST',
+  'LAST',
+  'CLUB',
+  'REGISTERED',
+  'STATUS',
+  'E1',
+  'E2',
+  'E3',
+  'E4',
+  'TOTAL',
+  'PUBLIC',
+  'REG_ID'
+];
 
 var CLUBS = [
   {
@@ -201,41 +234,243 @@ function ensureClubPlayersSheet_(clubId) {
 
 
 /* =========================================================
+   HEADER-NAME COLUMN RESOLUTION
+   ========================================================= */
+
+/*
+ * Reads row 1 of `sheet` and returns { FIRST: n, LAST: n, ... } mapping
+ * each HEADER_KEYS entry to the actual 1-based column number where its
+ * HEADER_ORDER text currently lives — wherever that is, in whatever
+ * order. Throws a descriptive Error if a required header is missing or
+ * duplicated. This is the only thing in the script that knows where a
+ * column "actually is"; nothing else should assume a fixed letter.
+ */
+function resolveColumns_(sheet) {
+  var lastColumn =
+    sheet.getLastColumn();
+
+  if (lastColumn < HEADER_ORDER.length) {
+    lastColumn = HEADER_ORDER.length;
+  }
+
+  var headerRow =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        lastColumn
+      )
+      .getValues()[0];
+
+  var location =
+    '"' +
+    sheet.getName() +
+    '" (' +
+    sheet.getParent().getName() +
+    ')';
+
+  var indexByName = {};
+
+  headerRow.forEach(function(value, i) {
+    var name =
+      String(value || '').trim();
+
+    if (!name) {
+      return;
+    }
+
+    if (
+      indexByName.hasOwnProperty(name)
+    ) {
+      throw new Error(
+        'Sheet ' +
+        location +
+        ' has a duplicate header: "' +
+        name +
+        '".'
+      );
+    }
+
+    indexByName[name] = i + 1;
+  });
+
+  var cols = {};
+  var missing = [];
+
+  HEADER_ORDER.forEach(function(name, i) {
+    var key = HEADER_KEYS[i];
+
+    if (
+      indexByName.hasOwnProperty(name)
+    ) {
+      cols[key] = indexByName[name];
+    } else {
+      missing.push(name);
+    }
+  });
+
+  if (missing.length) {
+    throw new Error(
+      'Sheet ' +
+      location +
+      ' is missing required header(s): ' +
+      missing.join(', ') +
+      '.'
+    );
+  }
+
+  return cols;
+}
+
+
+/*
+ * Like resolveColumns_(), but also requires the 12 headers to be in
+ * the exact canonical A:L order. Only "Prepare / Repair All Sheets"
+ * uses this — it's a repair tool, not a live data path, so it's
+ * allowed to be stricter and simply refuse to touch a sheet whose
+ * columns have already drifted, rather than guessing how to fix it.
+ */
+function assertCanonicalColumnOrder_(sheet) {
+  var cols =
+    resolveColumns_(sheet);
+
+  var inOrder =
+    HEADER_KEYS.every(function(key, i) {
+      return cols[key] === i + 1;
+    });
+
+  if (!inOrder) {
+    throw new Error(
+      'Sheet "' +
+      sheet.getName() +
+      '" (' +
+      sheet.getParent().getName() +
+      ') has all required headers, but not in the canonical A:L order. ' +
+      'Restore the original column order before repairing, or reorder ' +
+      'the columns by hand — this tool will not do it automatically.'
+    );
+  }
+
+  return cols;
+}
+
+
+/*
+ * Writes the canonical header row on a sheet whose row 1 is entirely
+ * blank (brand-new club/master sheet). Does nothing — and does not
+ * overwrite anything — if row 1 already has content of any kind.
+ */
+function bootstrapCanonicalHeadersIfBlank_(sheet) {
+  ensureMinimumColumns_(
+    sheet,
+    HEADER_ORDER.length
+  );
+
+  var firstRow =
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        HEADER_ORDER.length
+      )
+      .getValues()[0];
+
+  var isBlank =
+    firstRow.every(function(value) {
+      return (
+        String(value || '').trim() === ''
+      );
+    });
+
+  if (!isBlank) {
+    return;
+  }
+
+  sheet
+    .getRange(
+      1,
+      1,
+      1,
+      HEADER_ORDER.length
+    )
+    .setValues([
+      HEADER_ORDER
+    ]);
+}
+
+
+function columnToLetter_(column) {
+  var letter = '';
+
+  while (column > 0) {
+    var remainder =
+      (column - 1) % 26;
+
+    letter =
+      String.fromCharCode(
+        65 + remainder
+      ) + letter;
+
+    column =
+      Math.floor(
+        (column - 1) / 26
+      );
+  }
+
+  return letter;
+}
+
+
+/* =========================================================
    SHEET PREPARATION / REPAIR
    ========================================================= */
 
 function prepareAllSheets() {
-  var master =
-    ensureMasterSheet_();
-
-  preparePlayerSheet_(
-    master,
-    false
-  );
-
-  CLUBS.forEach(function(club) {
-    var players =
-      ensureClubPlayersSheet_(
-        club.id
-      );
+  try {
+    var master =
+      ensureMasterSheet_();
 
     preparePlayerSheet_(
-      players,
-      true
+      master,
+      false
     );
-  });
 
-  SpreadsheetApp.flush();
+    CLUBS.forEach(function(club) {
+      var players =
+        ensureClubPlayersSheet_(
+          club.id
+        );
 
-  safeAlert_(
-    'Preparation complete.\n\n' +
-    'E2:E1000 = status dropdown\n' +
-    'F2:I1000 = score entry\n' +
-    'J2:J1000 = formula\n' +
-    'K2:K1000 = checkbox only\n' +
-    'L = registration_id\n' +
-    'M:U cleared'
-  );
+      preparePlayerSheet_(
+        players,
+        true
+      );
+    });
+
+    SpreadsheetApp.flush();
+
+    safeAlert_(
+      'Preparation complete.\n\n' +
+      'E2:E1000 = status dropdown\n' +
+      'F2:I1000 = score entry\n' +
+      'J2:J1000 = formula\n' +
+      'K2:K1000 = checkbox only\n' +
+      'L = registration_id\n' +
+      'M:U cleared'
+    );
+  } catch (err) {
+    safeAlert_(
+      'Preparation stopped: ' +
+      (
+        (err && err.message) ||
+        err
+      ) +
+      '\n\nNothing further was modified. Fix the header issue ' +
+      'named above and re-run.'
+    );
+  }
 }
 
 
@@ -249,6 +484,15 @@ function preparePlayerSheet_(
     );
   }
 
+  bootstrapCanonicalHeadersIfBlank_(
+    sheet
+  );
+
+  var cols =
+    assertCanonicalColumnOrder_(
+      sheet
+    );
+
   ensureMinimumRows_(
     sheet,
     LAST_DATA_ROW
@@ -260,13 +504,13 @@ function preparePlayerSheet_(
   );
 
   /*
-   * Preserve existing K values before
+   * Preserve existing public_display values before
    * rebuilding checkbox validation.
    */
   var kRange =
     sheet.getRange(
       2,
-      COL.PUBLIC,
+      cols.PUBLIC,
       DATA_ROWS,
       1
     );
@@ -302,12 +546,12 @@ function preparePlayerSheet_(
   kRange.clearDataValidations();
 
   /*
-   * L must never be a checkbox.
+   * registration_id must never be a checkbox.
    */
   var lRange =
     sheet.getRange(
       2,
-      COL.REG_ID,
+      cols.REG_ID,
       DATA_ROWS,
       1
     );
@@ -338,7 +582,7 @@ function preparePlayerSheet_(
   mToU.clearFormat();
 
   /*
-   * E = attempt status dropdown.
+   * attempt_status = dropdown.
    */
   var statusRule =
     SpreadsheetApp
@@ -353,7 +597,7 @@ function preparePlayerSheet_(
   sheet
     .getRange(
       2,
-      COL.STATUS,
+      cols.STATUS,
       DATA_ROWS,
       1
     )
@@ -362,7 +606,7 @@ function preparePlayerSheet_(
     );
 
   /*
-   * F:I = numeric scores.
+   * end_1..end_4 = numeric scores.
    */
   var scoreRule =
     SpreadsheetApp
@@ -374,7 +618,7 @@ function preparePlayerSheet_(
   sheet
     .getRange(
       2,
-      COL.E1,
+      cols.E1,
       DATA_ROWS,
       4
     )
@@ -383,12 +627,13 @@ function preparePlayerSheet_(
     );
 
   /*
-   * J = total score.
+   * total_score. Canonical order is asserted above, so end_1..end_4
+   * are guaranteed contiguous immediately left of this column.
    */
   sheet
     .getRange(
       2,
-      COL.TOTAL,
+      cols.TOTAL,
       DATA_ROWS,
       1
     )
@@ -397,7 +642,7 @@ function preparePlayerSheet_(
     );
 
   /*
-   * K = only checkbox column.
+   * public_display = only checkbox column.
    */
   kRange.insertCheckboxes();
 
@@ -431,7 +676,8 @@ function preparePlayerSheet_(
 
   applyProtections_(
     sheet,
-    isClub
+    isClub,
+    cols
   );
 }
 
@@ -470,7 +716,8 @@ function ensureMinimumColumns_(
 
 function applyProtections_(
   sheet,
-  isClub
+  isClub,
+  cols
 ) {
   /*
    * Remove existing range protections on
@@ -493,7 +740,7 @@ function applyProtections_(
       1,
       1,
       1,
-      12
+      HEADER_ORDER.length
     ),
     'Header A:L'
   );
@@ -501,7 +748,7 @@ function applyProtections_(
   protectRange_(
     sheet.getRange(
       2,
-      1,
+      cols.FIRST,
       DATA_ROWS,
       4
     ),
@@ -511,7 +758,7 @@ function applyProtections_(
   protectRange_(
     sheet.getRange(
       2,
-      COL.TOTAL,
+      cols.TOTAL,
       DATA_ROWS,
       1
     ),
@@ -521,7 +768,7 @@ function applyProtections_(
   protectRange_(
     sheet.getRange(
       2,
-      COL.REG_ID,
+      cols.REG_ID,
       DATA_ROWS,
       1
     ),
@@ -529,14 +776,14 @@ function applyProtections_(
   );
 
   /*
-   * K is protected on club sheets only.
-   * Master K stays editable for Lauren.
+   * public_display is protected on club sheets only.
+   * Master public_display stays editable for Lauren.
    */
   if (isClub) {
     protectRange_(
       sheet.getRange(
         2,
-        COL.PUBLIC,
+        cols.PUBLIC,
         DATA_ROWS,
         1
       ),
@@ -583,10 +830,6 @@ function protectRange_(
    ========================================================= */
 
 function syncFromClubsNow() {
-  /*
-   * Shared with addRegistration() so a Tito webhook mid-write
-   * can't interleave with this sync and corrupt a row.
-   */
   var lock =
     LockService.getScriptLock();
 
@@ -596,6 +839,18 @@ function syncFromClubsNow() {
 
   try {
     syncFromClubsNow_();
+  } catch (err) {
+    logSystemError_(
+      'club_sync',
+      '',
+      err
+    );
+
+    notifySystemFailure_(
+      'club_sync',
+      '',
+      err
+    );
   } finally {
     lock.releaseLock();
   }
@@ -605,6 +860,13 @@ function syncFromClubsNow() {
 function syncFromClubsNow_() {
   var master =
     ensureMasterSheet_();
+
+  /*
+   * If MASTER's own headers are broken, nothing below can work —
+   * let this throw out to the caller, which logs/notifies once.
+   */
+  var masterCols =
+    resolveColumns_(master);
 
   var masterLastRow =
     Math.max(
@@ -616,7 +878,7 @@ function syncFromClubsNow_() {
     master
       .getRange(
         2,
-        COL.REG_ID,
+        masterCols.REG_ID,
         masterLastRow - 1,
         1
       )
@@ -641,12 +903,50 @@ function syncFromClubsNow_() {
 
   var updated = 0;
   var missing = [];
+  var skippedClubs = [];
 
   CLUBS.forEach(function(club) {
-    var players =
-      ensureClubPlayersSheet_(
-        club.id
+    var players;
+    var clubCols;
+
+    /*
+     * One club's broken headers should not take down the sync
+     * for the other four — skip it, log it, keep going.
+     */
+    try {
+      players =
+        ensureClubPlayersSheet_(
+          club.id
+        );
+
+      clubCols =
+        resolveColumns_(
+          players
+        );
+    } catch (err) {
+      skippedClubs.push(
+        club.label +
+        ': ' +
+        (
+          (err && err.message) ||
+          err
+        )
       );
+
+      logSystemError_(
+        'club_sync:' + club.id,
+        '',
+        err
+      );
+
+      notifySystemFailure_(
+        'club_sync:' + club.id,
+        '',
+        err
+      );
+
+      return;
+    }
 
     var lastRow =
       Math.max(
@@ -658,20 +958,30 @@ function syncFromClubsNow_() {
       return;
     }
 
+    var readWidth =
+      Math.max(
+        clubCols.STATUS,
+        clubCols.E1,
+        clubCols.E2,
+        clubCols.E3,
+        clubCols.E4,
+        clubCols.REG_ID
+      );
+
     var rows =
       players
         .getRange(
           2,
           1,
           lastRow - 1,
-          12
+          readWidth
         )
         .getValues();
 
     rows.forEach(function(row) {
       var registrationId =
         String(
-          row[COL.REG_ID - 1] || ''
+          row[clubCols.REG_ID - 1] || ''
         ).trim();
 
       if (!registrationId) {
@@ -695,7 +1005,7 @@ function syncFromClubsNow_() {
 
       var incomingStatus =
         String(
-          row[COL.STATUS - 1] || ''
+          row[clubCols.STATUS - 1] || ''
         )
           .trim()
           .toLowerCase();
@@ -705,7 +1015,7 @@ function syncFromClubsNow_() {
           master
             .getRange(
               masterRow,
-              COL.STATUS
+              masterCols.STATUS
             )
             .getValue() || ''
         )
@@ -713,28 +1023,60 @@ function syncFromClubsNow_() {
           .toLowerCase();
 
       /*
-       * Copy only E:I.
+       * Copy only attempt_status + the four end scores.
+       * Each field is written to its own resolved column, since
+       * the two sheets' column orders are not assumed to match.
        */
       master
         .getRange(
           masterRow,
-          COL.STATUS,
-          1,
-          5
+          masterCols.STATUS
         )
-        .setValues([[
-          row[COL.STATUS - 1],
-          row[COL.E1 - 1],
-          row[COL.E2 - 1],
-          row[COL.E3 - 1],
-          row[COL.E4 - 1]
-        ]]);
+        .setValue(
+          row[clubCols.STATUS - 1]
+        );
+
+      master
+        .getRange(
+          masterRow,
+          masterCols.E1
+        )
+        .setValue(
+          row[clubCols.E1 - 1]
+        );
+
+      master
+        .getRange(
+          masterRow,
+          masterCols.E2
+        )
+        .setValue(
+          row[clubCols.E2 - 1]
+        );
+
+      master
+        .getRange(
+          masterRow,
+          masterCols.E3
+        )
+        .setValue(
+          row[clubCols.E3 - 1]
+        );
+
+      master
+        .getRange(
+          masterRow,
+          masterCols.E4
+        )
+        .setValue(
+          row[clubCols.E4 - 1]
+        );
 
       /*
        * Auto-publish only on FIRST
        * transition into completed.
        *
-       * If Lauren manually unchecks K
+       * If Lauren manually unchecks public_display
        * afterward, future syncs leave it alone.
        */
       if (
@@ -744,7 +1086,7 @@ function syncFromClubsNow_() {
         master
           .getRange(
             masterRow,
-            COL.PUBLIC
+            masterCols.PUBLIC
           )
           .setValue(true);
       }
@@ -764,6 +1106,12 @@ function syncFromClubsNow_() {
     message +=
       '. Missing Master IDs: ' +
       missing.join(', ');
+  }
+
+  if (skippedClubs.length) {
+    message +=
+      '. Skipped clubs (header problem): ' +
+      skippedClubs.join('; ');
   }
 
   Logger.log(message);
@@ -839,12 +1187,26 @@ function onEdit(e) {
     return;
   }
 
+  var cols;
+
+  try {
+    cols =
+      resolveColumns_(sheet);
+  } catch (err) {
+    /*
+     * Header problem: skip this convenience behavior quietly
+     * rather than alert on every keystroke. The Tito/sync paths
+     * are what actually surface a broken MASTER sheet.
+     */
+    return;
+  }
+
   /*
-   * Only status edits in E.
+   * Only status edits.
    */
   if (
     e.range.getColumn() !==
-    COL.STATUS
+    cols.STATUS
   ) {
     return;
   }
@@ -862,7 +1224,7 @@ function onEdit(e) {
     sheet
       .getRange(
         e.range.getRow(),
-        COL.PUBLIC
+        cols.PUBLIC
       )
       .setValue(true);
   }
@@ -930,8 +1292,8 @@ function addRegistration(
         clubId
       );
 
-    var rowValues =
-      buildRegistrationRowValues_(
+    var fields =
+      buildRegistrationFields_(
         registration,
         clubId
       );
@@ -939,14 +1301,14 @@ function addRegistration(
     var masterRow =
       upsertRegistrationRow_(
         master,
-        rowValues,
+        fields,
         true
       );
 
     var clubRow =
       upsertRegistrationRow_(
         clubSheet,
-        rowValues,
+        fields,
         false
       );
 
@@ -1242,8 +1604,8 @@ function mapTitoPayloadToRegistration_(
 /*
  * Apps Script Web Apps always answer HTTP 200, regardless of what
  * doPost returns — there is no way to make Tito's own webhook retry
- * trigger on failure. ensureIngestErrorSheet_ / notifyIngestFailure_
- * below are the substitute: a durable, human-visible record of any
+ * trigger on failure. logSystemError_ / notifySystemFailure_ below
+ * are the substitute: a durable, human-visible record of any
  * registration that failed to apply, so it can be replayed by hand.
  */
 function doPost(e) {
@@ -1299,12 +1661,14 @@ function doPost(e) {
     });
 
   } catch (err) {
-    logIngestError_(
+    logSystemError_(
+      'tito_ingest',
       contents,
       err
     );
 
-    notifyIngestFailure_(
+    notifySystemFailure_(
+      'tito_ingest',
       contents,
       err
     );
@@ -1320,20 +1684,20 @@ function doPost(e) {
 }
 
 
-function ensureIngestErrorSheet_() {
+function ensureSystemErrorSheet_() {
   var ss =
     SpreadsheetApp
       .getActiveSpreadsheet();
 
   var sheet =
     ss.getSheetByName(
-      INGEST_ERROR_SHEET
+      SYSTEM_ERROR_SHEET
     );
 
   if (!sheet) {
     sheet =
       ss.insertSheet(
-        INGEST_ERROR_SHEET
+        SYSTEM_ERROR_SHEET
       );
 
     sheet
@@ -1341,10 +1705,11 @@ function ensureIngestErrorSheet_() {
         1,
         1,
         1,
-        3
+        4
       )
       .setValues([[
         'timestamp',
+        'source',
         'error',
         'payload'
       ]]);
@@ -1354,14 +1719,16 @@ function ensureIngestErrorSheet_() {
 }
 
 
-function logIngestError_(
+function logSystemError_(
+  source,
   rawContents,
   err
 ) {
   try {
-    ensureIngestErrorSheet_()
+    ensureSystemErrorSheet_()
       .appendRow([
         new Date(),
+        source,
         String(
           (err && err.message) ||
           err
@@ -1372,7 +1739,7 @@ function logIngestError_(
       ]);
   } catch (loggingErr) {
     Logger.log(
-      'Failed to log ingest error: ' +
+      'Failed to log system error: ' +
       loggingErr
     );
   }
@@ -1381,12 +1748,13 @@ function logIngestError_(
 
 /*
  * Optional: set the INGEST_ALERT_EMAIL script property to get a
- * mail notification per failed ingest. Left unset, failures are
- * still recorded in the Ingest Errors sheet — someone just has to
- * go look. Wrapped in its own try/catch so a mail-quota error can
- * never mask the original ingest failure.
+ * mail notification per failure. Left unset, failures are still
+ * recorded in the System Errors sheet — someone just has to go
+ * look. Wrapped in its own try/catch so a mail-quota error can
+ * never mask the original failure.
  */
-function notifyIngestFailure_(
+function notifySystemFailure_(
+  source,
   rawContents,
   err
 ) {
@@ -1404,27 +1772,33 @@ function notifyIngestFailure_(
 
     MailApp.sendEmail(
       alertEmail,
-      'Speed Shuffle: Tito registration ingest failed',
+      'Speed Shuffle: ' +
+      source +
+      ' failed',
       'Error: ' +
       String(
         (err && err.message) ||
         err
       ) +
-      '\n\nPayload:\n' +
-      String(
-        rawContents || ''
-      ).slice(0, 5000)
+      (
+        rawContents
+          ? '\n\nPayload:\n' +
+            String(
+              rawContents
+            ).slice(0, 5000)
+          : ''
+      )
     );
   } catch (mailErr) {
     Logger.log(
-      'Failed to send ingest failure email: ' +
+      'Failed to send failure email: ' +
       mailErr
     );
   }
 }
 
 
-function buildRegistrationRowValues_(
+function buildRegistrationFields_(
   registration,
   clubId
 ) {
@@ -1444,62 +1818,70 @@ function buildRegistrationRowValues_(
     status = 'registered';
   }
 
-  return [
-    String(
-      registration.first_name || ''
-    ).trim(),
+  return {
+    registration_id:
+      String(
+        registration.registration_id || ''
+      ).trim(),
 
-    String(
-      registration.last_initial || ''
-    ).trim(),
+    first_name:
+      String(
+        registration.first_name || ''
+      ).trim(),
 
-    clubId,
+    last_initial:
+      String(
+        registration.last_initial || ''
+      ).trim(),
 
-    registration.registered_at ||
+    club: clubId,
+
+    registered_at:
+      registration.registered_at ||
       Utilities.formatDate(
         new Date(),
         Session.getScriptTimeZone(),
         'yyyy-MM-dd'
       ),
 
-    status,
+    attempt_status: status,
 
-    registration.end_1_score !== undefined
-      ? registration.end_1_score
-      : '',
+    end_1_score:
+      registration.end_1_score !== undefined
+        ? registration.end_1_score
+        : '',
 
-    registration.end_2_score !== undefined
-      ? registration.end_2_score
-      : '',
+    end_2_score:
+      registration.end_2_score !== undefined
+        ? registration.end_2_score
+        : '',
 
-    registration.end_3_score !== undefined
-      ? registration.end_3_score
-      : '',
+    end_3_score:
+      registration.end_3_score !== undefined
+        ? registration.end_3_score
+        : '',
 
-    registration.end_4_score !== undefined
-      ? registration.end_4_score
-      : '',
-
-    '',     // J formula added separately
-    false,  // K defaults hidden
-    String(
-      registration.registration_id || ''
-    ).trim()
-  ];
+    end_4_score:
+      registration.end_4_score !== undefined
+        ? registration.end_4_score
+        : ''
+  };
 }
 
 
+/*
+ * Upserts one registration into `sheet` (either MASTER or a club
+ * Players sheet), matched by registration_id. Every field is written
+ * to its own resolved column — the two sheets involved in a single
+ * addRegistration() call are not assumed to share a column order.
+ */
 function upsertRegistrationRow_(
   sheet,
-  rowValues,
+  fields,
   isMaster
 ) {
   var registrationId =
-    String(
-      rowValues[
-        COL.REG_ID - 1
-      ] || ''
-    ).trim();
+    fields.registration_id;
 
   if (!registrationId) {
     throw new Error(
@@ -1507,20 +1889,25 @@ function upsertRegistrationRow_(
     );
   }
 
+  var cols =
+    resolveColumns_(sheet);
+
   var existingRow =
     findRegistrationRow_(
       sheet,
+      cols,
       registrationId
     );
 
   var targetRow =
     existingRow ||
     findFirstEmptyRegistrationRow_(
-      sheet
+      sheet,
+      cols
     );
 
   /*
-   * Preserve K if this is an existing
+   * Preserve public_display if this is an existing
    * Master registration.
    *
    * New registrations default false.
@@ -1535,67 +1922,130 @@ function upsertRegistrationRow_(
       sheet
         .getRange(
           existingRow,
-          COL.PUBLIC
+          cols.PUBLIC
         )
         .getValue() === true;
   }
 
-  /*
-   * A:I
-   */
   sheet
     .getRange(
       targetRow,
-      1,
-      1,
-      9
+      cols.FIRST
     )
-    .setValues([
-      rowValues.slice(
-        0,
-        9
-      )
-    ]);
+    .setValue(
+      fields.first_name
+    );
 
-  /*
-   * J formula.
-   */
   sheet
     .getRange(
       targetRow,
-      COL.TOTAL
+      cols.LAST
     )
-    .setFormula(
-      '=IF(COUNTA(F' +
-      targetRow +
-      ':I' +
-      targetRow +
-      ')=0,"",SUM(F' +
-      targetRow +
-      ':I' +
-      targetRow +
-      '))'
+    .setValue(
+      fields.last_initial
+    );
+
+  sheet
+    .getRange(
+      targetRow,
+      cols.CLUB
+    )
+    .setValue(
+      fields.club
+    );
+
+  sheet
+    .getRange(
+      targetRow,
+      cols.REGISTERED
+    )
+    .setValue(
+      fields.registered_at
+    );
+
+  sheet
+    .getRange(
+      targetRow,
+      cols.STATUS
+    )
+    .setValue(
+      fields.attempt_status
+    );
+
+  sheet
+    .getRange(
+      targetRow,
+      cols.E1
+    )
+    .setValue(
+      fields.end_1_score
+    );
+
+  sheet
+    .getRange(
+      targetRow,
+      cols.E2
+    )
+    .setValue(
+      fields.end_2_score
+    );
+
+  sheet
+    .getRange(
+      targetRow,
+      cols.E3
+    )
+    .setValue(
+      fields.end_3_score
+    );
+
+  sheet
+    .getRange(
+      targetRow,
+      cols.E4
+    )
+    .setValue(
+      fields.end_4_score
     );
 
   /*
-   * K public display.
+   * total_score formula, built from explicit cell references
+   * rather than a colon range — end_1..end_4 are not assumed to
+   * be contiguous on a sheet whose columns have been reordered.
    */
+  var endRefs = [
+    columnToLetter_(cols.E1) + targetRow,
+    columnToLetter_(cols.E2) + targetRow,
+    columnToLetter_(cols.E3) + targetRow,
+    columnToLetter_(cols.E4) + targetRow
+  ].join(',');
+
   sheet
     .getRange(
       targetRow,
-      COL.PUBLIC
+      cols.TOTAL
+    )
+    .setFormula(
+      '=IF(COUNTA(' +
+      endRefs +
+      ')=0,"",SUM(' +
+      endRefs +
+      '))'
+    );
+
+  sheet
+    .getRange(
+      targetRow,
+      cols.PUBLIC
     )
     .setValue(
       publicValue
     );
 
-  /*
-   * L registration ID.
-   */
   sheet
     .getRange(
       targetRow,
-      COL.REG_ID
+      cols.REG_ID
     )
     .setValue(
       registrationId
@@ -1607,6 +2057,7 @@ function upsertRegistrationRow_(
 
 function findRegistrationRow_(
   sheet,
+  cols,
   registrationId
 ) {
   var lastRow =
@@ -1628,7 +2079,7 @@ function findRegistrationRow_(
     sheet
       .getRange(
         2,
-        COL.REG_ID,
+        cols.REG_ID,
         numRows,
         1
       )
@@ -1654,7 +2105,8 @@ function findRegistrationRow_(
 
 
 function findFirstEmptyRegistrationRow_(
-  sheet
+  sheet,
+  cols
 ) {
   ensureMinimumRows_(
     sheet,
@@ -1665,7 +2117,7 @@ function findFirstEmptyRegistrationRow_(
     sheet
       .getRange(
         2,
-        COL.REG_ID,
+        cols.REG_ID,
         DATA_ROWS,
         1
       )
@@ -1708,79 +2160,92 @@ function findFirstEmptyRegistrationRow_(
  * manually hiding completed players.
  */
 function normalizeMasterPublicDisplay() {
-  var master =
-    ensureMasterSheet_();
+  try {
+    var master =
+      ensureMasterSheet_();
 
-  var statuses =
-    master
-      .getRange(
-        2,
-        COL.STATUS,
-        DATA_ROWS,
-        1
-      )
-      .getValues();
+    var cols =
+      resolveColumns_(master);
 
-  var registrationIds =
-    master
-      .getRange(
-        2,
-        COL.REG_ID,
-        DATA_ROWS,
-        1
-      )
-      .getValues();
+    var statuses =
+      master
+        .getRange(
+          2,
+          cols.STATUS,
+          DATA_ROWS,
+          1
+        )
+        .getValues();
 
-  var publicValues = [];
+    var registrationIds =
+      master
+        .getRange(
+          2,
+          cols.REG_ID,
+          DATA_ROWS,
+          1
+        )
+        .getValues();
 
-  for (
-    var i = 0;
-    i < DATA_ROWS;
-    i++
-  ) {
-    var status =
-      String(
-        statuses[i][0] || ''
-      )
-        .trim()
-        .toLowerCase();
+    var publicValues = [];
 
-    var registrationId =
-      String(
-        registrationIds[i][0] || ''
-      ).trim();
+    for (
+      var i = 0;
+      i < DATA_ROWS;
+      i++
+    ) {
+      var status =
+        String(
+          statuses[i][0] || ''
+        )
+          .trim()
+          .toLowerCase();
 
-    if (!registrationId) {
+      var registrationId =
+        String(
+          registrationIds[i][0] || ''
+        ).trim();
+
+      if (!registrationId) {
+        publicValues.push([
+          false
+        ]);
+
+        continue;
+      }
+
       publicValues.push([
-        false
+        status === 'completed'
       ]);
-
-      continue;
     }
 
-    publicValues.push([
-      status === 'completed'
-    ]);
-  }
+    master
+      .getRange(
+        2,
+        cols.PUBLIC,
+        DATA_ROWS,
+        1
+      )
+      .setValues(
+        publicValues
+      );
 
-  master
-    .getRange(
-      2,
-      COL.PUBLIC,
-      DATA_ROWS,
-      1
-    )
-    .setValues(
-      publicValues
+    SpreadsheetApp.flush();
+
+    safeAlert_(
+      'Master public_display normalized.\n\n' +
+      'Completed = checked\n' +
+      'Registered/cancelled/blank = unchecked'
     );
-
-  SpreadsheetApp.flush();
-
-  safeAlert_(
-    'Master public_display normalized.\n\n' +
-    'Completed = checked\n' +
-    'Registered/cancelled/blank = unchecked'
-  );
+  } catch (err) {
+    safeAlert_(
+      'Normalization stopped: ' +
+      (
+        (err && err.message) ||
+        err
+      )
+    );
+  }
 }
 
 
@@ -1794,7 +2259,7 @@ function normalizeMasterPublicDisplay() {
  * Run once:
  * - adds Jack to Master
  * - adds Jack to Brooklyn
- * - K is unchecked
+ * - public_display is unchecked
  *
  * Run a second time:
  * - should update same rows
@@ -1874,51 +2339,15 @@ function verifySystem() {
   var master =
     ensureMasterSheet_();
 
-  var masterHeaders =
-    master
-      .getRange(
-        1,
-        1,
-        1,
-        12
-      )
-      .getValues()[0];
-
-  var expectedHeaders = [
-    'first_name',
-    'last_initial',
-    'club',
-    'registered_at',
-    'attempt_status',
-    'end_1_score',
-    'end_2_score',
-    'end_3_score',
-    'end_4_score',
-    'total_score',
-    'public_display',
-    'registration_id'
-  ];
-
-  for (
-    var i = 0;
-    i < expectedHeaders.length;
-    i++
-  ) {
-    if (
-      String(
-        masterHeaders[i] || ''
-      ) !== expectedHeaders[i]
-    ) {
-      problems.push(
-        'MASTER header mismatch in column ' +
-        (i + 1)
-      );
-    }
-  }
-
-  if (!problems.length) {
+  try {
+    resolveColumns_(master);
     ok.push(
       'MASTER headers OK'
+    );
+  } catch (err) {
+    problems.push(
+      (err && err.message) ||
+      String(err)
     );
   }
 
@@ -1929,38 +2358,22 @@ function verifySystem() {
           club.id
         );
 
-      var headers =
+      resolveColumns_(
         players
-          .getRange(
-            1,
-            1,
-            1,
-            12
-          )
-          .getValues()[0];
+      );
 
-      if (
-        String(headers[0]) ===
-          'first_name' &&
-        String(headers[11]) ===
-          'registration_id'
-      ) {
-        ok.push(
-          club.label +
-          ' headers OK'
-        );
-      } else {
-        problems.push(
-          club.label +
-          ' header mismatch'
-        );
-      }
-
+      ok.push(
+        club.label +
+        ' headers OK'
+      );
     } catch (err) {
       problems.push(
         club.label +
         ': ' +
-        err.message
+        (
+          (err && err.message) ||
+          err
+        )
       );
     }
   });
@@ -2035,26 +2448,40 @@ function TEST_addStPeteRegistration() {
 
 function FIX_uncheckAllClubPublicDisplay() {
   var updated = [];
+  var problems = [];
 
   CLUBS.forEach(function(club) {
-    var players =
-      ensureClubPlayersSheet_(club.id);
+    try {
+      var players =
+        ensureClubPlayersSheet_(club.id);
 
-    var range =
-      players.getRange(
-        2,
-        COL.PUBLIC,
-        DATA_ROWS,
-        1
+      var cols =
+        resolveColumns_(players);
+
+      /*
+       * Keep checkbox validation in place,
+       * just set every club checkbox to FALSE.
+       */
+      players
+        .getRange(
+          2,
+          cols.PUBLIC,
+          DATA_ROWS,
+          1
+        )
+        .setValue(false);
+
+      updated.push(club.label);
+    } catch (err) {
+      problems.push(
+        club.label +
+        ': ' +
+        (
+          (err && err.message) ||
+          err
+        )
       );
-
-    /*
-     * Keep checkbox validation in place,
-     * just set every club checkbox to FALSE.
-     */
-    range.setValue(false);
-
-    updated.push(club.label);
+    }
   });
 
   SpreadsheetApp.flush();
@@ -2062,6 +2489,12 @@ function FIX_uncheckAllClubPublicDisplay() {
   safeAlert_(
     'Club public_display boxes cleared.\n\n' +
     updated.join('\n') +
+    (
+      problems.length
+        ? '\n\nProblems:\n' +
+          problems.join('\n')
+        : ''
+    ) +
     '\n\nADMIN Master was not changed.'
   );
 }
