@@ -2,7 +2,7 @@
  * Speed Shuffle — Score Tracking System
  * Bound to: ADMIN - Speed Shuffle Score Tracker
  *
- * CANONICAL COLUMN ORDER (what "Prepare / Repair All Sheets" lays down
+ * CANONICAL COLUMN ORDER (what prepareAllSheets() lays down
  * on a fresh or reset sheet):
  * A first_name
  * B last_initial
@@ -28,9 +28,10 @@
  * added elsewhere, still works. A sheet that is missing one of the 12
  * names (typo, deletion, accidental overwrite) fails loudly — the
  * write is refused and logged to the "System Errors" sheet instead of
- * silently landing in the wrong column. "Prepare / Repair All Sheets"
- * is stricter: it requires the canonical A:L order exactly, and stops
- * with an alert rather than reformatting a sheet that's out of order.
+ * silently landing in the wrong column. prepareAllSheets() (menu item
+ * "Repair All Sheets") is stricter: it requires the canonical A:L
+ * order exactly, and stops with an alert rather than reformatting a
+ * sheet that's out of order.
  *
  * Club → Master sync:
  * - matched by registration_id
@@ -142,19 +143,19 @@ function onOpen() {
     .getUi()
     .createMenu(SS_MENU)
     .addItem(
-      'Sync From Clubs Now',
+      'Sync Scores From Clubs Now',
       'syncFromClubsNow'
     )
     .addItem(
-      'Prepare / Repair All Sheets',
+      'Repair All Sheets (Formatting & Protections)',
       'prepareAllSheets'
     )
     .addItem(
-      'Install 1-Minute Sync Trigger',
+      'Install Automatic Sync (One-Time Setup)',
       'installOneMinuteSyncTrigger'
     )
     .addItem(
-      'Normalize Master Public Display',
+      'Reset Public Display To Match Status (Overwrites Manual Changes)',
       'normalizeMasterPublicDisplay'
     )
     .addToUi();
@@ -326,10 +327,10 @@ function resolveColumns_(sheet) {
 
 /*
  * Like resolveColumns_(), but also requires the 12 headers to be in
- * the exact canonical A:L order. Only "Prepare / Repair All Sheets"
- * uses this — it's a repair tool, not a live data path, so it's
- * allowed to be stricter and simply refuse to touch a sheet whose
- * columns have already drifted, rather than guessing how to fix it.
+ * the exact canonical A:L order. Only prepareAllSheets() uses this —
+ * it's a repair tool, not a live data path, so it's allowed to be
+ * stricter and simply refuse to touch a sheet whose columns have
+ * already drifted, rather than guessing how to fix it.
  */
 function assertCanonicalColumnOrder_(sheet) {
   var cols =
