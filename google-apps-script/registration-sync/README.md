@@ -20,7 +20,7 @@ this has no effect on behavior, locking, or Script Properties:
 | `Repair.gs` | Sheet formatting/protection setup — the "Repair All Sheets" menu item. |
 | `Sync.gs` | Club → Master sync and its 1-minute time trigger. |
 | `Ingest.gs` | The Tito webhook (`doPost`) and registration upsert. |
-| `ErrorLog.gs` | The `System Errors` sheet and optional email alert, shared by `Sync.gs` and `Ingest.gs`. |
+| `ErrorLog.gs` | The `System Errors` sheet and optional, per-source rate-limited email alert, shared by `Sync.gs` and `Ingest.gs`. |
 | `Admin.gs` | The custom menu, `onEdit`, the one-time `public_display` migration, and the manual `TEST_*`/`verifySystem` helpers. |
 
 When mirroring a change from the live editor back into this repo (or vice
@@ -135,6 +135,15 @@ cover.
   event) — nothing retries it automatically. Unauthorized requests (bad/missing
   token) are neither logged nor emailed, to avoid filling the error sheet with
   scanner noise from the public webhook URL.
+- **Email alerts are rate-limited per source.** `notifySystemFailure_` sends at
+  most one email per `source` per `ALERT_EMAIL_COOLDOWN_MS` (`Config.gs`, an
+  hour by default), tracked via a per-source last-sent timestamp in Script
+  Properties (`shouldSendAlertEmail_` in `ErrorLog.gs`). This matters because
+  `syncFromClubsNow` runs every minute: an unresolved, persistent failure (a
+  broken club sheet, a stuck `club_sync:unmatched_ids` row) would otherwise
+  send one email per run — up to ~1,440/day — long after the first email made
+  the point. The `System Errors` sheet is never throttled; every occurrence
+  still gets its own row regardless of whether the email was sent.
 - **A broken club doesn't take down the others.** If one club sheet's headers
   are broken, `syncFromClubsNow` logs it (`club_sync:<club id>`) and skips
   just that club, continuing the sync for the remaining four. If MASTER's own
@@ -151,16 +160,17 @@ cover.
   row (typo, a row MASTER never got, a manual club-sheet entry) used to only
   show up in `Logger.log` output — visible solely in the Apps Script execution
   transcript, which nobody checks routinely. It's real data drift, not a
-  transient error, so it now also goes to `System Errors`/email under
-  `source: club_sync:unmatched_ids` on every sync run where it's still
-  unresolved.
+  transient error, so it now also goes to `System Errors` on every sync run
+  where it's still unresolved, and to email under `source:
+  club_sync:unmatched_ids` — subject to the same per-source cooldown as any
+  other alert, so it's not a fresh email every minute the issue persists.
 
 ## Required Script Properties
 
 | Property | Purpose |
 | --- | --- |
 | `REGISTRATION_INGEST_TOKEN` | Shared secret the Tito webhook must send as `?token=` on the POST URL. Rotate by changing this and updating Tito's configured webhook URL together. |
-| `INGEST_ALERT_EMAIL` | Optional. If set, a failed *authenticated* ingest or club sync sends an email here in addition to the `System Errors` sheet row. Leave unset to rely on the sheet alone. |
+| `INGEST_ALERT_EMAIL` | Optional. If set, a failed *authenticated* ingest or club sync sends an email here in addition to the `System Errors` sheet row — throttled to at most one email per `source` per `ALERT_EMAIL_COOLDOWN_MS` (an hour by default; see `Config.gs`). Leave unset to rely on the sheet alone. |
 
 ## End-to-end test
 
@@ -197,7 +207,14 @@ and clean up the row afterward.
    arrived. This is what you're actually relying on in place of Tito-level
    retries — worth confirming it works before the tournament, not after a
    registration goes missing.
-6. **Column drift** — on a *test copy* of a club sheet (never a live one),
+6. **Alert email cooldown** — immediately repeat step 4's unknown-club case a
+   second time. Confirm a *second* `System Errors` row is appended (the sheet
+   is never throttled) but no second email arrives. In the Apps Script
+   editor's Script Properties (Project Settings → Script Properties), delete
+   the `alertLastSent:tito_ingest` key (or wait out
+   `ALERT_EMAIL_COOLDOWN_MS`) and repeat once more to confirm the email
+   resumes once the cooldown has elapsed.
+7. **Column drift** — on a *test copy* of a club sheet (never a live one),
    reorder a couple of columns (e.g. swap `total_score` and `public_display`)
    and confirm `TEST_titoBrooklynTicket`-style ingest still lands in the right
    fields (check by header, not by letter). Then rename or delete one required
@@ -206,12 +223,12 @@ and clean up the row afterward.
    Errors`, rather than writing anything. Restore the header name afterward —
    this step is about confirming the *failure mode*, not leaving the test copy
    broken.
-7. **Cleanup** — delete the test row(s) from MASTER and the affected club
+8. **Cleanup** — delete the test row(s) from MASTER and the affected club
    sheet (or clear their `registration_id` cell) so test data doesn't linger
    in the scoring system. `FIX_uncheckAllClubPublicDisplay` and
    `normalizeMasterPublicDisplay` are one-time fixups, not part of routine
    cleanup — don't run them just to remove test rows.
-8. **Regression check** — run `verifySystem` afterward to confirm headers on
+9. **Regression check** — run `verifySystem` afterward to confirm headers on
    MASTER and all five club sheets are still intact and exactly one
    `syncFromClubsNow` trigger is installed (test runs don't touch triggers, but
    it's a cheap sanity check after poking at the sheets by hand).

@@ -77,6 +77,16 @@ var DATA_ROWS = LAST_DATA_ROW - 1; // rows 2:1000
 
 var LOCK_WAIT_MS = 30000;
 
+/*
+ * notifySystemFailure_ (ErrorLog.gs) throttles to at most one email
+ * per `source` per cooldown window, so a persistent failure re-hit by
+ * the 1-minute syncFromClubsNow trigger can't flood INGEST_ALERT_EMAIL
+ * with one message per run. The System Errors sheet still gets every
+ * occurrence — only the email is throttled.
+ */
+var ALERT_EMAIL_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+var ALERT_LAST_SENT_PROPERTY_PREFIX = 'alertLastSent:';
+
 var STATUS_VALUES = [
   'registered',
   'completed',

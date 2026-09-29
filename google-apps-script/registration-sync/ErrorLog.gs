@@ -77,6 +77,11 @@ function logSystemError_(
  * recorded in the System Errors sheet — someone just has to go
  * look. Wrapped in its own try/catch so a mail-quota error can
  * never mask the original failure.
+ *
+ * Throttled per `source` (see shouldSendAlertEmail_ below) so a
+ * single persistent failure re-hit by the 1-minute sync trigger can't
+ * flood the inbox — the System Errors sheet row above still happens
+ * on every occurrence regardless.
  */
 function notifySystemFailure_(
   source,
@@ -92,6 +97,14 @@ function notifySystemFailure_(
         );
 
     if (!alertEmail) {
+      return;
+    }
+
+    if (
+      !shouldSendAlertEmail_(
+        source
+      )
+    ) {
       return;
     }
 
@@ -120,4 +133,54 @@ function notifySystemFailure_(
       mailErr
     );
   }
+}
+
+
+/*
+ * Per-source cooldown gate for notifySystemFailure_. Keyed off the
+ * same `source` string callers already pass (e.g. 'tito_ingest',
+ * 'club_sync', 'club_sync:<club id>', 'club_sync:unmatched_ids'), so
+ * unrelated failure types don't suppress each other's alerts — a
+ * broken club sheet doesn't silence a genuinely new Tito ingest
+ * failure, and vice versa. The last-sent time per source lives in
+ * Script Properties (not a sheet) so it survives across executions
+ * without adding sheet-write contention to the failure path.
+ *
+ * Returns true (and records "sent now") the first time a source
+ * fails, then false for any further failure of that same source
+ * within ALERT_EMAIL_COOLDOWN_MS. Every occurrence still gets its own
+ * System Errors row via logSystemError_ regardless of this return
+ * value — only the email is throttled.
+ */
+function shouldSendAlertEmail_(
+  source
+) {
+  var props =
+    PropertiesService
+      .getScriptProperties();
+
+  var key =
+    ALERT_LAST_SENT_PROPERTY_PREFIX +
+    source;
+
+  var lastSent =
+    Number(
+      props.getProperty(key)
+    ) || 0;
+
+  var now = Date.now();
+
+  if (
+    now - lastSent <
+    ALERT_EMAIL_COOLDOWN_MS
+  ) {
+    return false;
+  }
+
+  props.setProperty(
+    key,
+    String(now)
+  );
+
+  return true;
 }
