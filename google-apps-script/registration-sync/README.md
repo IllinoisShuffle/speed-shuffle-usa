@@ -282,9 +282,9 @@ discovering during the tournament:
   multiple files (this revision) makes this a little easier to get partially
   wrong, since a change can touch several files at once — see "Should we use
   clasp?" below for the actual fix.
-- **No automated tests.** The `TEST_*` functions are manual, run-by-hand
-  checks in the Apps Script editor; there's no CI coverage for this script,
-  unlike the rest of the repo's `npm test` suite.
+- **The `TEST_*` functions are still manual, run-by-hand checks in the
+  Apps Script editor** — see "Automated tests" below for what now runs in
+  CI instead, and why those functions specifically were left out of it.
 
 ## Using clasp
 
@@ -423,24 +423,53 @@ In practice this splits cleanly into two tiers of access:
   Google Group gives Jim that tier — is a Shared Drive admin decision, not
   something clasp or this repo can route around.
 
-### Can this run in GitHub Actions?
+### Automated tests
 
-Yes — this is a common, well-documented pattern, intentionally not set up
-yet (local-first, per the plan above):
+`tests/apps-script-harness.ts` loads this directory's actual `.gs` source
+(concatenated in a different order than the project's own file order, to
+prove — like the PR #2 review did by hand — that the split has no
+load-order dependency) into a `node:vm` sandbox with hand-written fakes for
+`SpreadsheetApp`/`LockService`/`PropertiesService`/`MailApp`/etc.
+`tests/registration-sync.test.ts` exercises it: column resolution under
+reordering, missing/duplicate/canonical-order header handling, Tito payload
+mapping (including club aliases and voided/cancelled tickets),
+`addRegistration` idempotency and column-agnostic writes to two
+differently-ordered sheets, the non-contiguous `total_score` formula,
+`public_display` preservation, `syncFromClubsNow_`'s partial-club-failure
+isolation and unmatched-ID surfacing, the "only auto-publish on the first
+completion" rule, and `doPost`'s auth/success/failure-logging paths. This
+runs via the same `npm test` as the rest of the repo, so it's covered by
+`.github/workflows/ci.yml` on every push and PR.
 
-1. The `clasp login` from step 2 above produces `~/.clasprc.json`. Its
-   contents get stored as a GitHub Actions secret (e.g. `CLASP_CREDENTIALS`).
-2. A workflow (triggered on push to this branch/path, or manually) recreates
-   `~/.clasprc.json` from the secret and runs `clasp push` from the repo
-   root (where `.clasp.json` lives).
-3. Optionally, a separate manually-triggered (`workflow_dispatch`) job
-   creates a new deployment to cut a new Web App version — kept manual on
-   purpose, so the Tito webhook only changes when someone deliberately
-   decides it should. **This job's stored credentials must belong to a
-   Manager-role account (e.g. Jim's), not just any editor** — the same Shared
-   Drive role requirement from the previous section applies to the Apps
-   Script API, not just the browser UI. The push-only credential (step 1)
-   doesn't need that tier.
+What it deliberately does **not** cover: anything requiring the real Sheets
+API, a real Tito webhook delivery, or Apps Script's own trigger/deployment
+machinery — that's what the manual "End-to-end test" section above is for.
+Sandboxed logic tests and a live-Sheets/Tito check are different tools; this
+suite existing doesn't make the manual procedure optional before deploying.
 
-That workflow file is future work once local clasp (above) is reconciled and
-proven out.
+### Running in GitHub Actions
+
+Two workflows exist today:
+
+- **`.github/workflows/clasp-push.yml`** — on every push to `main` that
+  touches this directory, restores `~/.clasprc.json` from the
+  `CLASP_CREDENTIALS` secret and runs `clasp push`. This only needs a
+  push-capable (Content Manager or above) account's credentials — see
+  "Editing/pushing vs. deploying" above — and only ever touches HEAD, never
+  the pinned deployment, exactly like running it locally.
+- **`.github/workflows/registration-sync-verify.yml`** — `workflow_dispatch`
+  only. Calls the live project's `verifySystem()` (headers + trigger-count
+  check; "Diagnostic only. Does not change data.") via `clasp run-function`.
+  **This has not been dry-run yet.** `clasp run` needs the Apps Script API
+  execution scope, which may hit the same Shared Drive Manager-role gate
+  that blocks New Deployment — confirm it actually works (ideally with
+  Jim's credentials) before relying on it. It also won't surface
+  `verifySystem`'s OK/Problems breakdown in the Actions log, since that goes
+  through `safeAlert_`'s `Logger.log` fallback rather than a return value —
+  today this only tells you whether the call succeeded or threw, not what
+  it found.
+
+Deliberately **not** automated: the mutating `TEST_*` functions and cutting
+a new deployment. Both write to (or would affect) the live production
+sheets/webhook and need a human — Jim, for the Manager-role reasons above —
+making the call, not a button anyone can click on every push.

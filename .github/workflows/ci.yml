@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - run: npm ci
+
+      - run: npm run check
+
+      # Covers both the frontend leaderboard logic (tests/standings.test.ts)
+      # and the registration-sync Apps Script logic against a mocked
+      # SpreadsheetApp/LockService/etc (tests/registration-sync.test.ts) --
+      # see google-apps-script/registration-sync/README.md's "Automated
+      # tests" section for what that second suite does and doesn't cover.
+      - run: npm test
