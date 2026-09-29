@@ -27,11 +27,14 @@ export interface Club {
 
 export interface PlayerStanding {
   id: string;
+  /** The real name, or a placeholder like "Name withheld" when hidden is true. */
   displayName: string;
   clubId: ClubId;
   rank: number;
   score?: number;
   completed: boolean;
+  /** True when this player opted out of being named — still occupies its rank and prize position. */
+  hidden?: boolean;
 }
 
 export interface ClubStats {

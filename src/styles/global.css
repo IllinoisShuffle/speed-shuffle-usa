@@ -363,6 +363,7 @@ button { font: inherit; }
 .podium-rank { font-family: var(--font-display); font-weight: 900; font-size: 2rem; color: var(--accent); }
 .podium-player { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .podium-name { font-weight: 700; font-size: 1.05rem; }
+.podium-name--hidden { display: inline-flex; align-items: center; gap: 5px; color: var(--hero-muted); font-weight: 600; font-style: italic; }
 .podium-score { font-family: var(--font-display); font-weight: 900; font-size: 1.6rem; }
 .podium-prize { font-size: 12px; color: var(--hero-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
@@ -370,6 +371,7 @@ button { font: inherit; }
 .winners-compact li { display: flex; align-items: center; gap: 10px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-small); }
 .winners-compact-rank { font-family: var(--font-display); font-weight: 900; color: var(--muted); width: 30px; flex-shrink: 0; }
 .winners-compact-name { flex: 1; font-weight: 700; font-size: 0.9rem; }
+.winners-compact-name--hidden { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-weight: 600; font-style: italic; }
 .winners-compact-score { font-variant-numeric: tabular-nums; font-weight: 700; }
 .winners-compact-prize { font-size: 11px; color: var(--muted); }
 
@@ -499,6 +501,7 @@ thead th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
 .rank-disc { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 6px; border-radius: var(--radius-pill); font-weight: 800; font-variant-numeric: tabular-nums; color: var(--muted); }
 .rank-disc--payout { background: var(--accent); color: var(--accent-ink); }
 .player-name { font-weight: 700; }
+.player-name--hidden { display: flex; align-items: center; gap: 5px; color: var(--muted); font-weight: 600; font-style: italic; }
 .score { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .score--hidden { display: flex; align-items: center; justify-content: flex-end; gap: 5px; color: var(--muted); font-weight: 600; font-size: 0.8rem; }
 .prize { text-align: right; font-variant-numeric: tabular-nums; color: var(--accent-strong); font-weight: 700; }

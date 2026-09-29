@@ -46,9 +46,18 @@ export function parseStandings(values: Cell[][], showScores: boolean) {
   const players: PlayerStanding[] = [];
   completed.forEach((player, index) => {
     if (index === 0 || player.score !== completed[index - 1].score) rank = index + 1;
-    if (!player.visible) return;
-    players.push({ id: player.id, displayName: player.displayName, clubId: player.clubId,
-      rank, completed: true, ...(showScores ? { score: player.score } : {}) });
+    // hide_publicly withholds the name only -- an opted-out player still
+    // occupies their rank and prize position, so a leaderboard visitor
+    // can see a top score without an unexplained gap in the ranking.
+    players.push({
+      id: player.visible ? player.id : `hidden-${rank}`,
+      displayName: player.visible ? player.displayName : 'Name withheld',
+      clubId: player.clubId,
+      rank,
+      completed: true,
+      ...(player.visible ? {} : { hidden: true as const }),
+      ...(showScores ? { score: player.score } : {}),
+    });
   });
   return { players, stats, showScores, updatedAt: new Date().toISOString() };
 }

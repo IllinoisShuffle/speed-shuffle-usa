@@ -106,8 +106,15 @@ function renderLeaderboard() {
       rankCell.append(note);
     }
 
-    const nameCell = cell('th', player.displayName, 'player-name');
+    const nameCell = document.createElement('th');
     nameCell.setAttribute('scope', 'row');
+    if (player.hidden) {
+      nameCell.className = 'player-name player-name--hidden';
+      nameCell.append(lockIcon(), document.createTextNode(' ' + player.displayName));
+    } else {
+      nameCell.className = 'player-name';
+      nameCell.textContent = player.displayName;
+    }
 
     const clubCell = document.createElement('td');
     clubCell.append(clubPill(player.clubId));
@@ -246,8 +253,13 @@ function updateWinners(players: PlayerStanding[]) {
       const wrap = document.createElement('div');
       wrap.className = 'podium-player';
       const name = document.createElement('p');
-      name.className = 'podium-name';
-      name.textContent = player.displayName;
+      if (player.hidden) {
+        name.className = 'podium-name podium-name--hidden';
+        name.append(lockIcon(), document.createTextNode(' ' + player.displayName));
+      } else {
+        name.className = 'podium-name';
+        name.textContent = player.displayName;
+      }
       wrap.append(name, clubPill(player.clubId));
       if (typeof player.score === 'number') {
         const score = document.createElement('p');
@@ -275,8 +287,13 @@ function updateWinners(players: PlayerStanding[]) {
     rankSpan.className = 'winners-compact-rank';
     rankSpan.textContent = formatRank(player.rank, top10);
     const nameSpan = document.createElement('span');
-    nameSpan.className = 'winners-compact-name';
-    nameSpan.textContent = player.displayName;
+    if (player.hidden) {
+      nameSpan.className = 'winners-compact-name winners-compact-name--hidden';
+      nameSpan.append(lockIcon(), document.createTextNode(' ' + player.displayName));
+    } else {
+      nameSpan.className = 'winners-compact-name';
+      nameSpan.textContent = player.displayName;
+    }
     li.append(rankSpan, nameSpan, clubPill(player.clubId));
     if (typeof player.score === 'number') {
       const scoreSpan = document.createElement('span');
