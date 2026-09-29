@@ -2,23 +2,23 @@
  * Club -> Master sync, plus the 10-minute time trigger that runs it
  * automatically. Copies attempt_status + the four end scores from
  * each club sheet to the matching MASTER row, matched by
- * registration_id. Never creates rows and never copies
- * public_display from a club sheet. Shares LockService.getScriptLock()
- * with addRegistration() in Ingest.gs so a Tito webhook landing
- * mid-sync can't interleave and corrupt a row.
+ * registration_id. Never creates rows, and never touches
+ * hide_publicly in either direction — that column is entirely
+ * Lauren's manual opt-out tool on MASTER; a completed registrant
+ * becomes publicly visible the moment attempt_status flips to
+ * completed, purely via the public site's own query (see
+ * netlify/lib/standings.ts), with no action needed here. Shares
+ * LockService.getScriptLock() with addRegistration() in Ingest.gs so a
+ * Tito webhook landing mid-sync can't interleave and corrupt a row.
  *
  * MASTER reads/writes are batched per club, one call per sync-owned
- * column (STATUS, E1-E4, and PUBLIC), instead of one getValue/setValue
- * pair per matched row. Each column is read fresh right before a
- * club's rows are applied to it and written back in full immediately
- * after — so a club's update is durably committed before the next
- * club runs (matching the old row-by-row commit granularity: one
- * club's broken data can't roll back an already-applied club), while
- * turning what used to be ~6 round trips per matched registrant into
- * 10 round trips per club (STATUS/E1-E4 always; PUBLIC is read/written
- * only if this club actually has a first-time transition to completed
- * this run — it's never sourced from the club sheet, so there's
- * nothing to snapshot otherwise), regardless of registrant count.
+ * column (STATUS, E1-E4), instead of one getValue/setValue pair per
+ * matched row. Each column is read fresh right before a club's rows
+ * are applied to it and written back in full immediately after — so a
+ * club's update is durably committed before the next club runs (one
+ * club's broken data can't roll back an already-applied club) — while
+ * turning what used to be several round trips per matched registrant
+ * into a flat 10 round trips per club, regardless of registrant count.
  */
 
 
@@ -183,7 +183,7 @@ function syncFromClubsNow_() {
      * before this club's rows are applied — so it reflects whatever
      * an earlier club in this same run already wrote. Each column is
      * read/written on its own resolved index, never assuming STATUS
-     * through PUBLIC are contiguous.
+     * through E4 are contiguous.
      */
     var masterStatus =
       master
@@ -235,16 +235,6 @@ function syncFromClubsNow_() {
         )
         .getValues();
 
-    /*
-     * public_display is never read from the club sheet and never
-     * inspected for its current value — it's only ever force-set to
-     * true on a first transition into completed. So unlike the five
-     * columns above, there's nothing to snapshot until a transition
-     * actually happens: read it lazily, on the first one found in
-     * this club's rows, and only write it back if at least one did.
-     */
-    var masterPublic = null;
-
     rows.forEach(function(row) {
       var registrationId =
         String(
@@ -273,24 +263,11 @@ function syncFromClubsNow_() {
       var i =
         masterRow - 2;
 
-      var incomingStatus =
-        String(
-          row[clubCols.STATUS - 1] || ''
-        )
-          .trim()
-          .toLowerCase();
-
-      var previousStatus =
-        String(
-          masterStatus[i][0] || ''
-        )
-          .trim()
-          .toLowerCase();
-
       /*
        * Copy only attempt_status + the four end scores, into the
        * in-memory column snapshots — written back to the sheet once,
-       * after every row in this club has been applied.
+       * after every row in this club has been applied. hide_publicly
+       * is never touched here; see the file header comment.
        */
       masterStatus[i][0] =
         row[clubCols.STATUS - 1];
@@ -306,32 +283,6 @@ function syncFromClubsNow_() {
 
       masterE4[i][0] =
         row[clubCols.E4 - 1];
-
-      /*
-       * Auto-publish only on FIRST
-       * transition into completed.
-       *
-       * If Lauren manually unchecks public_display
-       * afterward, future syncs leave it alone.
-       */
-      if (
-        previousStatus !== 'completed' &&
-        incomingStatus === 'completed'
-      ) {
-        if (!masterPublic) {
-          masterPublic =
-            master
-              .getRange(
-                2,
-                masterCols.PUBLIC,
-                masterRowCount,
-                1
-              )
-              .getValues();
-        }
-
-        masterPublic[i][0] = true;
-      }
 
       updated++;
     });
@@ -380,17 +331,6 @@ function syncFromClubsNow_() {
         1
       )
       .setValues(masterE4);
-
-    if (masterPublic) {
-      master
-        .getRange(
-          2,
-          masterCols.PUBLIC,
-          masterRowCount,
-          1
-        )
-        .setValues(masterPublic);
-    }
   });
 
   SpreadsheetApp.flush();

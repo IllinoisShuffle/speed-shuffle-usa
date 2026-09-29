@@ -4,14 +4,14 @@ import { parseStandings, type Cell } from '../netlify/lib/standings.ts';
 import { spreadsheetId } from '../netlify/lib/sheets.ts';
 import { createHandler } from '../netlify/functions/leaderboard-data.ts';
 
-const headers = ['registration_id', 'first_name', 'last_name', 'club', 'attempt_status', 'total_score', 'public_display', 'email'];
+const headers = ['registration_id', 'first_name', 'last_name', 'club', 'attempt_status', 'total_score', 'hide_publicly', 'email'];
 const fixture = (): Cell[][] => [headers,
-  ['a', 'Alex', 'Quinn', 'chicago', 'completed', 80, true, 'private@example.invalid'],
-  ['b', 'Casey', 'Rivera', 'brooklyn', 'completed', 74, true],
-  ['c', 'Drew', 'Sato', 'st-pete', 'completed', 74, true],
-  ['d', 'Hidden', 'Torres', 'tampa', 'completed', 90, false],
-  ['e', 'Pending', 'Underwood', 'chicago', 'registered', '', true],
-  ['f', 'Cancelled', 'Vance', 'chicago', 'cancelled', '', false]];
+  ['a', 'Alex', 'Quinn', 'chicago', 'completed', 80, false, 'private@example.invalid'],
+  ['b', 'Casey', 'Rivera', 'brooklyn', 'completed', 74, false],
+  ['c', 'Drew', 'Sato', 'st-pete', 'completed', 74, false],
+  ['d', 'Hidden', 'Torres', 'tampa', 'completed', 90, true],
+  ['e', 'Pending', 'Underwood', 'chicago', 'registered', '', false],
+  ['f', 'Cancelled', 'Vance', 'chicago', 'cancelled', '', true]];
 
 test('sorts and ranks all completed players, suppresses opt-outs and private fields', () => {
   const result = parseStandings(fixture(), false);
@@ -37,10 +37,10 @@ test('rejects duplicate IDs, unknown clubs and malformed totals instead of false
     assert.throws(() => parseStandings(rows, false));
   }
 });
-test('blank public-display is private and a zero completed total is not missing', () => {
+test('blank hide_publicly defaults to visible (opt-out) and a zero completed total is not missing', () => {
   const rows = fixture(); rows[1][6] = ''; rows[2][5] = 0;
   const result = parseStandings(rows, false);
-  assert.ok(!result.players.some(player => player.id === 'a'));
+  assert.ok(result.players.some(player => player.id === 'a'));
   assert.ok(result.players.some(player => player.id === 'b'));
 });
 test('function never leaks upstream errors or silently returns mock data', async () => {

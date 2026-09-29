@@ -1,8 +1,7 @@
 /**
  * The "Speed Shuffle" custom menu, general sheet-lookup helpers used
- * across every file, MASTER's manual-edit convenience behavior, the
- * one-time public_display migration tool, and manual test/diagnostic
- * helpers run from the Apps Script editor.
+ * across every file, and manual test/diagnostic helpers run from the
+ * Apps Script editor.
  */
 
 
@@ -25,10 +24,6 @@ function onOpen() {
     .addItem(
       'Install Automatic Sync (One-Time Setup)',
       'installSyncTrigger'
-    )
-    .addItem(
-      'Reset Public Display To Match Status (Overwrites Manual Changes)',
-      'normalizeMasterPublicDisplay'
     )
     .addToUi();
 }
@@ -107,184 +102,6 @@ function ensureClubPlayersSheet_(clubId) {
 
 
 /* =========================================================
-   MASTER MANUAL EDIT BEHAVIOR
-   ========================================================= */
-
-function onEdit(e) {
-  if (
-    !e ||
-    !e.range
-  ) {
-    return;
-  }
-
-  var sheet =
-    e.range.getSheet();
-
-  if (
-    sheet.getName() !==
-    MASTER_SHEET
-  ) {
-    return;
-  }
-
-  if (
-    e.range.getRow() < 2 ||
-    e.range.getNumRows() !== 1 ||
-    e.range.getNumColumns() !== 1
-  ) {
-    return;
-  }
-
-  var cols;
-
-  try {
-    cols =
-      resolveColumns_(sheet);
-  } catch (err) {
-    /*
-     * Header problem: skip this convenience behavior quietly
-     * rather than alert on every keystroke. The Tito/sync paths
-     * are what actually surface a broken MASTER sheet.
-     */
-    return;
-  }
-
-  /*
-   * Only status edits.
-   */
-  if (
-    e.range.getColumn() !==
-    cols.STATUS
-  ) {
-    return;
-  }
-
-  var status =
-    String(
-      e.value || ''
-    )
-      .trim()
-      .toLowerCase();
-
-  if (
-    status === 'completed'
-  ) {
-    sheet
-      .getRange(
-        e.range.getRow(),
-        cols.PUBLIC
-      )
-      .setValue(true);
-  }
-}
-
-
-/* =========================================================
-   ONE-TIME MASTER PUBLIC DISPLAY NORMALIZATION
-   ========================================================= */
-
-/*
- * Use this ONLY as a one-time migration.
- *
- * It sets:
- * completed → checked
- * registered/cancelled/blank → unchecked
- *
- * Do NOT keep rerunning this once Lauren begins
- * manually hiding completed players.
- */
-function normalizeMasterPublicDisplay() {
-  try {
-    var master =
-      ensureMasterSheet_();
-
-    var cols =
-      resolveColumns_(master);
-
-    var statuses =
-      master
-        .getRange(
-          2,
-          cols.STATUS,
-          DATA_ROWS,
-          1
-        )
-        .getValues();
-
-    var registrationIds =
-      master
-        .getRange(
-          2,
-          cols.REG_ID,
-          DATA_ROWS,
-          1
-        )
-        .getValues();
-
-    var publicValues = [];
-
-    for (
-      var i = 0;
-      i < DATA_ROWS;
-      i++
-    ) {
-      var status =
-        String(
-          statuses[i][0] || ''
-        )
-          .trim()
-          .toLowerCase();
-
-      var registrationId =
-        String(
-          registrationIds[i][0] || ''
-        ).trim();
-
-      if (!registrationId) {
-        publicValues.push([
-          false
-        ]);
-
-        continue;
-      }
-
-      publicValues.push([
-        status === 'completed'
-      ]);
-    }
-
-    master
-      .getRange(
-        2,
-        cols.PUBLIC,
-        DATA_ROWS,
-        1
-      )
-      .setValues(
-        publicValues
-      );
-
-    SpreadsheetApp.flush();
-
-    safeAlert_(
-      'Master public_display normalized.\n\n' +
-      'Completed = checked\n' +
-      'Registered/cancelled/blank = unchecked'
-    );
-  } catch (err) {
-    safeAlert_(
-      'Normalization stopped: ' +
-      (
-        (err && err.message) ||
-        err
-      )
-    );
-  }
-}
-
-
-/* =========================================================
    TEST HELPERS
    ========================================================= */
 
@@ -294,7 +111,7 @@ function normalizeMasterPublicDisplay() {
  * Run once:
  * - adds Jack to Master
  * - adds Jack to Brooklyn
- * - public_display is unchecked
+ * - hide_publicly is unchecked (visible, once completed)
  *
  * Run a second time:
  * - should update same rows
@@ -486,7 +303,7 @@ function TEST_addStPeteRegistration() {
   );
 }
 
-function FIX_uncheckAllClubPublicDisplay() {
+function FIX_uncheckAllClubHidePublicly() {
   var updated = [];
   var problems = [];
 
@@ -505,7 +322,7 @@ function FIX_uncheckAllClubPublicDisplay() {
       players
         .getRange(
           2,
-          cols.PUBLIC,
+          cols.HIDE,
           DATA_ROWS,
           1
         )
@@ -527,7 +344,7 @@ function FIX_uncheckAllClubPublicDisplay() {
   SpreadsheetApp.flush();
 
   safeAlert_(
-    'Club public_display boxes cleared.\n\n' +
+    'Club hide_publicly boxes cleared.\n\n' +
     updated.join('\n') +
     (
       problems.length

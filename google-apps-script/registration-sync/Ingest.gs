@@ -583,22 +583,22 @@ function upsertRegistrationRow_(
     );
 
   /*
-   * Preserve public_display if this is an existing
-   * Master registration.
-   *
-   * New registrations default false.
+   * Preserve hide_publicly if this is an existing Master registration
+   * — a re-ingest (e.g. a Tito ticket update) must never clear Lauren's
+   * manual opt-out. New registrations default false (visible, once
+   * completed).
    */
-  var publicValue = false;
+  var hidePubliclyValue = false;
 
   if (
     isMaster &&
     existingRow
   ) {
-    publicValue =
+    hidePubliclyValue =
       sheet
         .getRange(
           existingRow,
-          cols.PUBLIC
+          cols.HIDE
         )
         .getValue() === true;
   }
@@ -712,10 +712,10 @@ function upsertRegistrationRow_(
   sheet
     .getRange(
       targetRow,
-      cols.PUBLIC
+      cols.HIDE
     )
     .setValue(
-      publicValue
+      hidePubliclyValue
     );
 
   sheet

@@ -83,9 +83,10 @@ unique. Required column names:
 - `attempt_status`: `registered`, `completed`, or `cancelled`.
 - `total_score`: numeric whole-number total; required when completed. Zero and
   negative totals are valid; blanks and formula errors are not.
-- `public_display`: TRUE/checked to display a completed player. FALSE/unchecked or
-  blank hides that player. Opted-out participants still count toward club participation
-  and overall ranks; ranks may therefore have gaps.
+- `hide_publicly`: opt-out, not opt-in. FALSE/unchecked or blank (the default) shows
+  a completed player; TRUE/checked hides that one specific player. Opted-out
+  participants still count toward club participation and overall ranks; ranks may
+  therefore have gaps.
 
 Additional layout columns: `registered_at`, `end_1_score`, `end_2_score`,
 `end_3_score`, `end_4_score`, and `email`. The website never returns individual
@@ -97,7 +98,7 @@ ARRAYFORMULA calculating totals for all rows once all four ends are populated.
 **Do not type in column K or delete its K2 formula.** Add or replace input values in
 A:J and L. A player with `registered` status does not appear in individual standings;
 set `completed` after entering all four ends. Mark a cancellation with `cancelled`.
-Copy an existing public-display checkbox into new rows, or enter TRUE/FALSE.
+Copy an existing hide_publicly checkbox into new rows, or enter TRUE/FALSE.
 
 The sheet currently contains six explicitly synthetic players, five completed and
 one registered. These are Google Sheet records, not bundled frontend mock arrays.

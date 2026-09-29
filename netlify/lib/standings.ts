@@ -3,7 +3,7 @@ import type { ClubId, ClubStats, PlayerStanding } from '../../src/lib/types.ts';
 
 export class SheetError extends Error {}
 export type Cell = string | number | boolean;
-const required = ['registration_id', 'first_name', 'last_name', 'club', 'attempt_status', 'total_score', 'public_display'];
+const required = ['registration_id', 'first_name', 'last_name', 'club', 'attempt_status', 'total_score', 'hide_publicly'];
 const clubIds = new Set<string>(clubs.map(club => club.id));
 
 export function parseStandings(values: Cell[][], showScores: boolean) {
@@ -33,10 +33,12 @@ export function parseStandings(values: Cell[][], showScores: boolean) {
     // initial is ever exposed to the public site, derived right here.
     const lastInitial = cell('last_name').charAt(0);
     const score = Number(cell('total_score'));
-    const display = cell('public_display').toLowerCase();
-    if (!firstName || !/^\p{L}$/u.test(lastInitial) || !cell('total_score') || !Number.isFinite(score) || !Number.isInteger(score) || !['', 'true', 'false'].includes(display)) throw invalid();
+    // Opt-out: hidden only when explicitly checked. Blank/false is the
+    // common case (visible) -- there is no separate "opt in" step.
+    const hidden = cell('hide_publicly').toLowerCase();
+    if (!firstName || !/^\p{L}$/u.test(lastInitial) || !cell('total_score') || !Number.isFinite(score) || !Number.isInteger(score) || !['', 'true', 'false'].includes(hidden)) throw invalid();
     club.completed++;
-    completed.push({ id, clubId, displayName: `${firstName.split(/\s+/)[0]} ${lastInitial}.`, rank: 0, score, completed: true, visible: display === 'true' });
+    completed.push({ id, clubId, displayName: `${firstName.split(/\s+/)[0]} ${lastInitial}.`, rank: 0, score, completed: true, visible: hidden !== 'true' });
   }
 
   completed.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
