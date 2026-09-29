@@ -22,6 +22,9 @@ on:
 
 jobs:
   verify:
+    # See the same guard in clasp-push.yml -- .clasp.json's scriptId is
+    # committed in the repo content, so this must not run in a fork's context.
+    if: github.repository == 'IllinoisShuffle/speed-shuffle-usa'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
