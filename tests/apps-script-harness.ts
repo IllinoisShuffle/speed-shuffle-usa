@@ -98,6 +98,7 @@ type RegistrationSyncApi = {
   mapTitoPayloadToRegistration_(payload: Record<string, unknown>, webhookEvent: string): Registration;
   addRegistration(registration: Registration): { registration_id: string; club: string; master_row: number; club_row: number };
   syncFromClubsNow_(): void;
+  syncFromClubsNow(): void;
   installSyncTrigger(): void;
   pauseSyncTrigger(): void;
   doPost(e: { parameter?: Record<string, string>; postData?: { contents: string } }): { getContent(): string };
@@ -130,6 +131,7 @@ export function loadRegistrationSync() {
       getScriptProperties: () => ({
         getProperty: (k: string) => (properties.has(k) ? properties.get(k) : null),
         setProperty: (k: string, v: string) => { properties.set(k, v); },
+        deleteProperty: (k: string) => { properties.delete(k); },
       }),
     },
     Utilities: { formatDate: (date: Date) => date.toISOString().slice(0, 10) },

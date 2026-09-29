@@ -50,11 +50,17 @@ files listed above):
    the public site the moment `attempt_status` flips to `completed`, purely
    via the site's own query (`netlify/lib/standings.ts`). `hide_publicly` is
    Lauren's manual tool alone, on MASTER only, for hiding one specific
-   completed player. **Pause Automatic Sync** (`pauseSyncTrigger`) deletes the
-   trigger without touching sheet data or the Tito webhook — use it to stop
-   `System Errors` filling up with the same failure every run while a
-   header/schema mismatch is being fixed by hand (see "Outstanding risks"
-   below); re-running **Install Automatic Sync** resumes it.
+   completed player. **Pause Automatic Sync** (`pauseSyncTrigger`) sets the
+   `syncPaused` Script Property, which `syncFromClubsNow()` checks first and
+   no-ops on — not trigger deletion, since `ScriptApp.getProjectTriggers()`
+   only sees triggers owned by the *currently executing account*, so a
+   trigger someone else installed is invisible (and undeletable) to everyone
+   else, even with full edit access (see "Outstanding risks" below). The
+   property is project-wide, so pausing works regardless of who installed
+   it. Use it to stop `System Errors` filling up with the same failure every
+   run while a header/schema mismatch is being fixed by hand; re-running
+   **Install Automatic Sync** resumes it (clears the property and
+   reinstalls/re-owns the trigger).
 3. **Tito registration ingest** (`doPost`, `mapTitoPayloadToRegistration_`,
    `addRegistration`) — the actual Tito integration. A Tito webhook posts ticket
    events to this script's deployed Web App URL; the handler verifies a shared
@@ -297,6 +303,19 @@ discovering during the tournament:
   with the `last_name`/`email` change. **Pause Automatic Sync** (Sync.gs)
   stops the resulting `System Errors` spam without needing that access
   tier; fixing the headers still does.
+- **`ScriptApp.getProjectTriggers()` only sees triggers owned by the
+  currently executing account.** Discovered when Pause Automatic Sync's
+  first version (trigger deletion only) reported "no trigger installed"
+  to an account that hadn't personally run "Install Automatic Sync" —
+  the trigger was real and firing, just invisible (and undeletable) to
+  everyone except whichever account originally created it, even with full
+  edit access to the project. Fixed by having Pause/Resume gate
+  `syncFromClubsNow()` through a Script Property (`syncPaused`) instead of
+  relying on trigger visibility — Script Properties are project-wide, not
+  per-account. The same blind spot still applies to anything that calls
+  `getProjectTriggers()` directly, including `verifySystem`'s trigger-count
+  check: it can report zero (or the wrong count) if the real trigger
+  belongs to a different account than whoever runs `verifySystem`.
 - **Docs/code drift.** The `.gs` files in this repo are a manually maintained
   mirror of what's actually deployed in the Apps Script editor. Nothing
   enforces that future edits made live in the editor get copied back here —

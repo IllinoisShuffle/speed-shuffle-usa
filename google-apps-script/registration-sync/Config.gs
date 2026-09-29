@@ -103,6 +103,18 @@ var LOCK_WAIT_MS = 30000;
 var ALERT_EMAIL_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 var ALERT_LAST_SENT_PROPERTY_PREFIX = 'alertLastSent:';
 
+/*
+ * Pause Automatic Sync (Sync.gs) sets this Script Property rather than
+ * deleting the installed trigger -- ScriptApp.getProjectTriggers() only
+ * returns triggers created by the *currently executing user's own
+ * account*, so a trigger installed by one person can be invisible (and
+ * undeletable) to everyone else with edit access, even though the
+ * trigger keeps firing. A Script Property is project-wide, not
+ * per-user, so pausing/resuming works regardless of who originally ran
+ * "Install Automatic Sync".
+ */
+var SYNC_PAUSED_PROPERTY = 'syncPaused';
+
 var STATUS_VALUES = [
   'registered',
   'completed',
