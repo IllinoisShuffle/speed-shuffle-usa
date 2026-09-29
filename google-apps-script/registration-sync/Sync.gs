@@ -17,11 +17,11 @@ function syncFromClubsNow() {
   var lock =
     LockService.getScriptLock();
 
-  lock.waitLock(
-    LOCK_WAIT_MS
-  );
-
   try {
+    lock.waitLock(
+      LOCK_WAIT_MS
+    );
+
     syncFromClubsNow_();
   } catch (err) {
     logSystemError_(
@@ -290,6 +290,32 @@ function syncFromClubsNow_() {
     message +=
       '. Missing Master IDs: ' +
       missing.join(', ');
+
+    /*
+     * A club-sheet registration_id with no matching MASTER row is
+     * real data drift (typo, manual club-sheet entry, or a row
+     * MASTER never got) — not a transient error, but silent
+     * Logger.log-only visibility means nobody notices until someone
+     * happens to read the execution transcript. Surface it the same
+     * way every other sync/ingest problem is surfaced.
+     */
+    logSystemError_(
+      'club_sync:unmatched_ids',
+      '',
+      new Error(
+        'Club row(s) with no matching MASTER registration_id: ' +
+        missing.join(', ')
+      )
+    );
+
+    notifySystemFailure_(
+      'club_sync:unmatched_ids',
+      '',
+      new Error(
+        'Club row(s) with no matching MASTER registration_id: ' +
+        missing.join(', ')
+      )
+    );
   }
 
   if (skippedClubs.length) {
