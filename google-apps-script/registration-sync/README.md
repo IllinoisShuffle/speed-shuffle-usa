@@ -286,68 +286,194 @@ discovering during the tournament:
   multiple files (this revision) makes this a little easier to get partially
   wrong, since a change can touch several files at once — see "Should we use
   clasp?" below for the actual fix.
-- **No automated tests.** The `TEST_*` functions are manual, run-by-hand
-  checks in the Apps Script editor; there's no CI coverage for this script,
-  unlike the rest of the repo's `npm test` suite.
+- **The `TEST_*` functions are still manual, run-by-hand checks in the
+  Apps Script editor** — see "Automated tests" below for what now runs in
+  CI instead, and why those functions specifically were left out of it.
 
-## Should we use clasp?
+## Using clasp
 
 [`clasp`](https://github.com/google/clasp) ("Command Line Apps Script
 Projects") is Google's official CLI for Apps Script. Instead of copy-pasting
-between this repo and the browser editor, it lets you:
+between this repo and the browser editor, it syncs this directory directly
+against the live project:
 
-- `clasp clone <scriptId>` — pull the live project's actual files down locally.
-- `clasp push` — push local files up, overwriting the project's current
-  (HEAD) source.
-- `clasp pull` — pull the live project down again, to capture anything
+- `npm run clasp:login` — one-time interactive Google OAuth login for clasp
+  itself (writes `~/.clasprc.json`).
+- `npm run clasp:pull` — pull the live project down, to capture anything
   someone edited directly in the browser.
-- `clasp deploy` — create a new Web App/API executable **version** (this is
-  the step that would move the Tito webhook off "Version 1" onto whatever's
-  newer — a deliberate action, never automatic).
-- `clasp open` — opens the project in the browser editor.
+- `npm run clasp:push` — push local files up, overwriting the project's
+  current (HEAD) source.
+- `npm run clasp:status` — list which local files clasp considers part of
+  the project (respects `.claspignore`) without changing anything.
+- `npm run clasp:open` — open the project in the browser editor.
+- `npx clasp create-deployment` — create a new Web App/API executable
+  **version** (this is the step that would move the Tito webhook off
+  "Version 1" onto whatever's newer — a deliberate action, run by hand, never
+  from these npm scripts).
 
-**We should use it.** It directly closes the docs/code drift risk above,
-which this multi-file split made slightly worse: with clasp, git *is* the
-source of truth (`clasp push`/`clasp pull` against the real project ID)
-instead of a manually maintained mirror, and a sync is one command instead of
-copy-pasting N files and hoping none were missed.
+This directly closes the docs/code drift risk above, which the multi-file
+split made slightly worse: with clasp, git *is* the source of truth
+(`clasp push`/`clasp pull` against the real project ID) instead of a manually
+maintained mirror, and a sync is one command instead of copy-pasting N files
+and hoping none were missed. `@google/clasp` is a devDependency of this repo
+(`npm install` pulls it in) so everyone runs the same version via `npx`/`npm
+run` instead of a global install.
 
-A few things worth knowing before adopting it:
+A few things worth knowing before using it:
 
-- **The first step is a real, one-time reconciliation, not automation.**
-  `clasp clone` against the actual live script ID will pull down whatever's
-  *really* deployed right now — which may not match this repo's mirror,
-  especially since none of this session's fixes have been copied into the
-  live editor yet. That diff needs a careful manual look once, before anyone
-  ever runs `clasp push` for real.
+- **The first pull is a real, one-time reconciliation, not automation.**
+  Cloning against the actual live script ID pulls down whatever's *really*
+  deployed right now — which may not match this repo's mirror if anyone has
+  edited live in the browser since the last manual copy. That diff needs a
+  careful manual look once, before anyone runs `clasp:push` for real.
 - **Script Properties (`REGISTRATION_INGEST_TOKEN`, `INGEST_ALERT_EMAIL`) are
   not part of the pushed/pulled files** — they're a separate per-project
   key/value store, so clasp syncing source code can't accidentally leak or
   overwrite them.
+- **`.claspignore`** in this directory allowlists `appsscript.json` and
+  `*.gs` only, so `clasp push` never tries to upload this `README.md` (or
+  anything else non-script) as project source.
 - **`clasp push` updates HEAD, not the pinned Web App version.** That's
   actually a good fit for what's already set up: HEAD is what every
   time-driven and simple trigger always runs anyway (see the earlier
-  discussion of the Executions log), so auto-pushing keeps `Sync.gs`/`Repair.gs`/`Admin.gs`
-  current automatically without touching the live Tito webhook, which stays
-  pinned to Version 1 until someone deliberately runs `clasp deploy`.
+  discussion of the Executions log), so pushing keeps `Sync.gs`/`Repair.gs`/
+  `Admin.gs` current automatically without touching the live Tito webhook,
+  which stays pinned to Version 1 until someone deliberately creates a new
+  deployment.
 
-**Can this run in GitHub Actions?** Yes — this is a common, well-documented
-pattern:
+### One-time local setup (done — kept here for whoever logs in next)
 
-1. One person runs `clasp login` once, from a real browser, with a Google
-   account that has edit access to this Apps Script project. This produces a
-   local credentials file (`~/.clasprc.json`) — **this step needs a human;
-   it's an interactive OAuth consent flow, not something that can be scripted
-   or done on someone's behalf.**
-2. That file's contents get stored as a GitHub Actions secret (e.g.
-   `CLASP_CREDENTIALS`).
-3. A workflow (triggered on push to this branch/path, or manually) recreates
-   `~/.clasprc.json` from the secret and runs `clasp push` from
-   `google-apps-script/registration-sync/`.
-4. Optionally, a separate manually-triggered (`workflow_dispatch`) job runs
-   `clasp deploy` to cut a new Web App version — kept manual on purpose, so
-   the Tito webhook only changes when someone deliberately decides it should.
+This was a one-time setup that only a human with edit access to the live
+Apps Script project could do — none of it could be scripted or done on
+someone's behalf. It's now done once (see "What the first clone found"
+below); these are the steps for anyone else (e.g. John) who wants their own
+local clasp login later:
 
-I can write that workflow file once the initial `clasp clone`/reconciliation
-and the one-time `clasp login` have happened — those two steps need to come
-first and need a human with access to the live Google account.
+1. **Enable the Apps Script API** for your account at
+   https://script.google.com/home/usersettings (a toggle, off by default) —
+   clasp can't create/push projects until this is on.
+2. **`npm run clasp:login`** — opens a real browser for Google OAuth consent.
+   Use a Google account that has edit access to the `ADMIN - Speed Shuffle
+   Score Tracker` sheet's Apps Script project. If `clone`/`pull`/`push`
+   fail afterward with "insufficient authentication scopes," the consent
+   screen didn't get every scope checked — log out (`npx clasp logout`) and
+   log in again, making sure to approve all of them.
+3. **Find the live script ID.** Open the ADMIN sheet → Extensions → Apps
+   Script; the URL is `https://script.google.com/.../projects/<SCRIPT_ID>/edit`.
+   (`npx clasp list-scripts`, after step 2, also lists every Apps Script
+   project the logged-in account can see, including this one, without
+   needing to open the sheet.)
+4. **Clone it, from the repo root**, into this directory:
+   ```sh
+   npx clasp clone <SCRIPT_ID> --rootDir google-apps-script/registration-sync
+   ```
+   This writes `.clasp.json` **at the repo root** (script ID + root dir —
+   not secret, already committed) — clasp resolves it from the current
+   directory, not from inside `rootDir`, so all `npm run clasp:*` commands
+   run from the repo root with no extra flags needed.
+
+### What the first clone found
+
+The reconciliation this was meant to catch was real, not a formality: the
+live project was still the **original single `Code.js`** (pre-dating the
+7-file split entirely), missing every fix from PR #2 —
+`resolveColumns_`/header-name column resolution, the `getScriptLock()`
+concurrency locking around `addRegistration`/`syncFromClubsNow`,
+`logSystemError_`/the `System Errors` sheet, and the lock-timeout catch and
+unmatched-ID surfacing that go with it. None of those fixes had reached
+production; they'd only ever existed in this repo. Function-by-function and
+club-workbook-ID diffing against `Code.js` turned up no live-only logic —
+the one function unique to it, `buildRegistrationRowValues_`, was the old
+pre-refactor version of what's now `buildRegistrationFields_` here, not
+something unique to preserve — so the local `Code.js` was deleted and
+`npm run clasp:push` sent this directory's fixed version to the live
+project's **HEAD**. That does not touch the pinned Web App version/webhook
+(see above) — production Tito ingest keeps running the old code until
+someone with Manager access deploys HEAD. Before asking for that deploy,
+run through this file's "End-to-end test" section against HEAD (Apps Script
+Web Apps' `/dev` test URL, or the `TEST_*` functions from the editor) to
+confirm the newly-pushed fixes actually behave as expected live, not just in
+the standalone Node harness mentioned in PR #2.
+
+From now on, `npm run clasp:pull` / `npm run clasp:push` (from the repo
+root) keep this directory and the live project's HEAD in sync.
+
+### Editing/pushing vs. deploying need different accounts
+
+The ADMIN sheet lives in the illinoisshuffleboard.org **Shared Drive**, and
+Shared Drive items have no single Drive "owner" the way a My Drive file
+does — access is role-based instead (Manager, Content Manager, Contributor,
+etc.). Apps Script's Deploy action for a *container-bound* script still
+checks for something like traditional file ownership, and on a Shared Drive
+it falls back to requiring the Shared Drive's top **Manager** role. Content
+Manager — what Nick and John currently have — is enough for everything except
+that one action, confirmed by hitting a genuine "You do not have permission
+to perform this action" error (not an account mix-up, not a clasp/API
+limitation) on **New Deployment**. Jim has Manager and can deploy.
+
+In practice this splits cleanly into two tiers of access:
+
+- **`clasp login` / `clasp pull` / `clasp push` / editing code / running
+  `TEST_*`/`verifySystem` / managing triggers** — fine under any editor's
+  account (Nick's or John's). Importantly, **`clasp push` only updates HEAD**,
+  never the pinned Web App version (see above) — so pushing from a
+  Content-Manager account can't accidentally affect the live Tito webhook.
+  Changes just sit at HEAD until someone with Manager access deploys them.
+- **Creating or updating a deployment** (moving the live webhook onto newer
+  HEAD code) — needs Manager-role access on the Shared Drive. Today that
+  means asking Jim to do the actual Deploy click in the browser once code is
+  pushed to HEAD; he doesn't need clasp set up at all for this. The
+  alternative — getting Nick/John bumped to Manager, or added to whatever
+  Google Group gives Jim that tier — is a Shared Drive admin decision, not
+  something clasp or this repo can route around.
+
+### Automated tests
+
+`tests/apps-script-harness.ts` loads this directory's actual `.gs` source
+(concatenated in a different order than the project's own file order, to
+prove — like the PR #2 review did by hand — that the split has no
+load-order dependency) into a `node:vm` sandbox with hand-written fakes for
+`SpreadsheetApp`/`LockService`/`PropertiesService`/`MailApp`/etc.
+`tests/registration-sync.test.ts` exercises it: column resolution under
+reordering, missing/duplicate/canonical-order header handling, Tito payload
+mapping (including club aliases and voided/cancelled tickets),
+`addRegistration` idempotency and column-agnostic writes to two
+differently-ordered sheets, the non-contiguous `total_score` formula,
+`public_display` preservation, `syncFromClubsNow_`'s partial-club-failure
+isolation and unmatched-ID surfacing, the "only auto-publish on the first
+completion" rule, and `doPost`'s auth/success/failure-logging paths. This
+runs via the same `npm test` as the rest of the repo, so it's covered by
+`.github/workflows/ci.yml` on every push and PR.
+
+What it deliberately does **not** cover: anything requiring the real Sheets
+API, a real Tito webhook delivery, or Apps Script's own trigger/deployment
+machinery — that's what the manual "End-to-end test" section above is for.
+Sandboxed logic tests and a live-Sheets/Tito check are different tools; this
+suite existing doesn't make the manual procedure optional before deploying.
+
+### Running in GitHub Actions
+
+Two workflows exist today:
+
+- **`.github/workflows/clasp-push.yml`** — on every push to `main` that
+  touches this directory, restores `~/.clasprc.json` from the
+  `CLASP_CREDENTIALS` secret and runs `clasp push`. This only needs a
+  push-capable (Content Manager or above) account's credentials — see
+  "Editing/pushing vs. deploying" above — and only ever touches HEAD, never
+  the pinned deployment, exactly like running it locally.
+- **`.github/workflows/registration-sync-verify.yml`** — `workflow_dispatch`
+  only. Calls the live project's `verifySystem()` (headers + trigger-count
+  check; "Diagnostic only. Does not change data.") via `clasp run-function`.
+  **This has not been dry-run yet.** `clasp run` needs the Apps Script API
+  execution scope, which may hit the same Shared Drive Manager-role gate
+  that blocks New Deployment — confirm it actually works (ideally with
+  Jim's credentials) before relying on it. It also won't surface
+  `verifySystem`'s OK/Problems breakdown in the Actions log, since that goes
+  through `safeAlert_`'s `Logger.log` fallback rather than a return value —
+  today this only tells you whether the call succeeded or threw, not what
+  it found.
+
+Deliberately **not** automated: the mutating `TEST_*` functions and cutting
+a new deployment. Both write to (or would affect) the live production
+sheets/webhook and need a human — Jim, for the Manager-role reasons above —
+making the call, not a button anyone can click on every push.
