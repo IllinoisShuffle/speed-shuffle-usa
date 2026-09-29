@@ -150,7 +150,24 @@ function preparePlayerSheet_(
   lRange.clearDataValidations();
 
   /*
-   * N:U unused. (M is email — left alone here, protected below.)
+   * email is plain text, like registration_id -- never a checkbox.
+   */
+  var mRange =
+    sheet.getRange(
+      2,
+      cols.EMAIL,
+      DATA_ROWS,
+      1
+    );
+
+  try {
+    mRange.removeCheckboxes();
+  } catch (err) {}
+
+  mRange.clearDataValidations();
+
+  /*
+   * N:U unused. (M is email, handled above -- not part of this range.)
    */
   var nToU =
     sheet.getRange(
