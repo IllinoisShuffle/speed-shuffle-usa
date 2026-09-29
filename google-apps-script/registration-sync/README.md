@@ -21,7 +21,7 @@ this has no effect on behavior, locking, or Script Properties:
 | `Sync.gs` | Club → Master sync and its 10-minute time trigger. |
 | `Ingest.gs` | The Tito webhook (`doPost`) and registration upsert. |
 | `ErrorLog.gs` | The `System Errors` sheet and optional, per-source rate-limited email alert, shared by `Sync.gs` and `Ingest.gs`. |
-| `Admin.gs` | The custom menu, `onEdit`, the one-time `public_display` migration, and the manual `TEST_*`/`verifySystem` helpers. |
+| `Admin.gs` | The custom menu and the manual `TEST_*`/`verifySystem`/`FIX_*` helpers. |
 
 When mirroring a change from the live editor back into this repo (or vice
 versa), copy **all** files that changed — a partial copy across this many
@@ -44,10 +44,13 @@ files listed above):
    and the identity/total/registration columns stay locked.
 2. **Club → Master sync** (`syncFromClubsNow`, installed on a 10-minute
    time trigger via `installSyncTrigger`) — matches club sheet rows to
-   MASTER rows by `registration_id`, copies `attempt_status` and the four end
-   scores, and auto-checks `public_display` the first time a row transitions to
-   `completed`. It never copies `public_display` from a club sheet, so a manual
-   uncheck by Lauren on MASTER sticks.
+   MASTER rows by `registration_id` and copies `attempt_status` plus the four
+   end scores. It never reads or writes `hide_publicly` in either direction —
+   that column is opt-out, not opt-in: a completed registrant is visible on
+   the public site the moment `attempt_status` flips to `completed`, purely
+   via the site's own query (`netlify/lib/standings.ts`). `hide_publicly` is
+   Lauren's manual tool alone, on MASTER only, for hiding one specific
+   completed player.
 3. **Tito registration ingest** (`doPost`, `mapTitoPayloadToRegistration_`,
    `addRegistration`) — the actual Tito integration. A Tito webhook posts ticket
    events to this script's deployed Web App URL; the handler verifies a shared
@@ -59,7 +62,7 @@ files listed above):
 
 Every read/write in the sync and ingest paths looks up each of the 13 required
 column headers (`first_name`, `last_name`, `club`, `registered_at`,
-`attempt_status`, `end_1_score`…`end_4_score`, `total_score`, `public_display`,
+`attempt_status`, `end_1_score`…`end_4_score`, `total_score`, `hide_publicly`,
 `registration_id`, `email`) **by name**, via `resolveColumns_(sheet)`, instead of
 assuming fixed letters. This was the fix for a real fragility: previously every
 function referenced hardcoded column numbers, so a club admin inserting,
@@ -185,7 +188,8 @@ and clean up the row afterward.
    calls `addRegistration`. Confirm the alert shows a `master_row` and
    `club_row`, then check both the MASTER sheet and the Brooklyn club sheet for
    a `test-tito-brooklyn-001` row with `first_name: Tito`, `attempt_status:
-   registered`, `public_display` unchecked.
+   registered`, `hide_publicly` unchecked (the default — visible once
+   completed).
 2. **Idempotency** — run `TEST_titoBrooklynTicket` again unchanged. It must
    update the same two rows, not add new ones (same row numbers in the alert).
 3. **Real webhook, over HTTP** — from Tito's event/webhook settings for this
@@ -199,7 +203,8 @@ and clean up the row afterward.
    doesn't match any club (expect a thrown "Could not map Tito release to
    club" error surfaced as `{ ok: false, error: ... }` in the HTTP response) and
    with a voided/cancelled ticket state (expect `attempt_status: 'cancelled'`
-   with no `public_display` change).
+   — `hide_publicly` is never touched by this path at all, in either
+   direction).
 5. **Failure path** — confirm the unknown-club case from step 4 also appended
    a row to the `System Errors` sheet tab in the ADMIN workbook (create it
    first if this is the first failure ever recorded; `source` should read
@@ -215,7 +220,7 @@ and clean up the row afterward.
    `ALERT_EMAIL_COOLDOWN_MS`) and repeat once more to confirm the email
    resumes once the cooldown has elapsed.
 7. **Column drift** — on a *test copy* of a club sheet (never a live one),
-   reorder a couple of columns (e.g. swap `total_score` and `public_display`)
+   reorder a couple of columns (e.g. swap `total_score` and `hide_publicly`)
    and confirm `TEST_titoBrooklynTicket`-style ingest still lands in the right
    fields (check by header, not by letter). Then rename or delete one required
    header (e.g. `attempt_status` → `status`) and confirm the next ingest/sync
@@ -225,9 +230,8 @@ and clean up the row afterward.
    broken.
 8. **Cleanup** — delete the test row(s) from MASTER and the affected club
    sheet (or clear their `registration_id` cell) so test data doesn't linger
-   in the scoring system. `FIX_uncheckAllClubPublicDisplay` and
-   `normalizeMasterPublicDisplay` are one-time fixups, not part of routine
-   cleanup — don't run them just to remove test rows.
+   in the scoring system. `FIX_uncheckAllClubHidePublicly` is a one-time
+   fixup, not part of routine cleanup — don't run it just to remove test rows.
 9. **Regression check** — run `verifySystem` afterward to confirm headers on
    MASTER and all five club sheets are still intact and exactly one
    `syncFromClubsNow` trigger is installed (test runs don't touch triggers, but

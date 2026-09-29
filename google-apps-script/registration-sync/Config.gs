@@ -28,9 +28,11 @@
  * H end_3_score             ← club editable
  * I end_4_score             ← club editable
  * J total_score             ← formula, protected
- * K public_display          ← Master-only checkbox
- *                              default FALSE
- *                              auto-TRUE on first transition to completed
+ * K hide_publicly           ← Master-only checkbox, opt-out
+ *                              default FALSE (visible once completed)
+ *                              Lauren checks it to hide one specific
+ *                              completed player; nothing else ever
+ *                              touches this column
  * L registration_id        ← stable identity key, protected
  * M email                   ← protected
  *
@@ -62,13 +64,16 @@
  * - matched by registration_id
  * - copies attempt_status + the four end scores
  * - Master total_score recalculates
- * - public_display is NEVER copied from clubs
+ * - hide_publicly is entirely outside the sync's scope — it never
+ *   reads or writes that column, in either direction
  *
- * Public display behavior:
- * - new registration = unchecked
- * - first transition to completed = checked
- * - Lauren can manually uncheck a completed player
- * - future syncs do NOT force it back on
+ * Public visibility (hide_publicly) is opt-out, not opt-in:
+ * - new registration = unchecked (visible, once completed)
+ * - a completed registrant is visible on the public site the moment
+ *   attempt_status flips to completed — nothing else has to happen
+ * - Lauren checks hide_publicly to hide one specific completed player
+ * - nothing ever re-checks or un-checks it automatically, so there is
+ *   no "future syncs force it back" case to guard against
  */
 
 
@@ -121,7 +126,7 @@ var HEADER_ORDER = [
   'end_3_score',
   'end_4_score',
   'total_score',
-  'public_display',
+  'hide_publicly',
   'registration_id',
   'email'
 ];
@@ -137,7 +142,7 @@ var HEADER_KEYS = [
   'E3',
   'E4',
   'TOTAL',
-  'PUBLIC',
+  'HIDE',
   'REG_ID',
   'EMAIL'
 ];

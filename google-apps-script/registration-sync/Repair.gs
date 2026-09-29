@@ -91,13 +91,13 @@ function preparePlayerSheet_(
   );
 
   /*
-   * Preserve existing public_display values before
+   * Preserve existing hide_publicly values before
    * rebuilding checkbox validation.
    */
   var kRange =
     sheet.getRange(
       2,
-      cols.PUBLIC,
+      cols.HIDE,
       DATA_ROWS,
       1
     );
@@ -229,7 +229,7 @@ function preparePlayerSheet_(
     );
 
   /*
-   * public_display = only checkbox column.
+   * hide_publicly = only checkbox column.
    */
   kRange.insertCheckboxes();
 
@@ -254,7 +254,9 @@ function preparePlayerSheet_(
       }
 
       /*
-       * Blank/new rows default hidden.
+       * Blank/new rows default to false — not hidden, i.e. visible
+       * once completed. This is an opt-out column: false is the
+       * common case, true is Lauren's rare manual override.
        */
       return [false];
     });
@@ -345,18 +347,18 @@ function applyProtections_(
   );
 
   /*
-   * public_display is protected on club sheets only.
-   * Master public_display stays editable for Lauren.
+   * hide_publicly is protected on club sheets only.
+   * Master hide_publicly stays editable for Lauren.
    */
   if (isClub) {
     protectRange_(
       sheet.getRange(
         2,
-        cols.PUBLIC,
+        cols.HIDE,
         DATA_ROWS,
         1
       ),
-      'public_display K — Master controlled'
+      'hide_publicly K — Master controlled'
     );
   }
 }
