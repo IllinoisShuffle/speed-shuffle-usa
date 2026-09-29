@@ -286,64 +286,105 @@ discovering during the tournament:
   checks in the Apps Script editor; there's no CI coverage for this script,
   unlike the rest of the repo's `npm test` suite.
 
-## Should we use clasp?
+## Using clasp
 
 [`clasp`](https://github.com/google/clasp) ("Command Line Apps Script
 Projects") is Google's official CLI for Apps Script. Instead of copy-pasting
-between this repo and the browser editor, it lets you:
+between this repo and the browser editor, it syncs this directory directly
+against the live project:
 
-- `clasp clone <scriptId>` — pull the live project's actual files down locally.
-- `clasp push` — push local files up, overwriting the project's current
-  (HEAD) source.
-- `clasp pull` — pull the live project down again, to capture anything
+- `npm run clasp:login` — one-time interactive Google OAuth login for clasp
+  itself (writes `~/.clasprc.json`).
+- `npm run clasp:pull` — pull the live project down, to capture anything
   someone edited directly in the browser.
-- `clasp deploy` — create a new Web App/API executable **version** (this is
-  the step that would move the Tito webhook off "Version 1" onto whatever's
-  newer — a deliberate action, never automatic).
-- `clasp open` — opens the project in the browser editor.
+- `npm run clasp:push` — push local files up, overwriting the project's
+  current (HEAD) source.
+- `npm run clasp:status` — list which local files clasp considers part of
+  the project (respects `.claspignore`) without changing anything.
+- `npm run clasp:open` — open the project in the browser editor.
+- `npx clasp create-deployment` — create a new Web App/API executable
+  **version** (this is the step that would move the Tito webhook off
+  "Version 1" onto whatever's newer — a deliberate action, run by hand, never
+  from these npm scripts).
 
-**We should use it.** It directly closes the docs/code drift risk above,
-which this multi-file split made slightly worse: with clasp, git *is* the
-source of truth (`clasp push`/`clasp pull` against the real project ID)
-instead of a manually maintained mirror, and a sync is one command instead of
-copy-pasting N files and hoping none were missed.
+This directly closes the docs/code drift risk above, which the multi-file
+split made slightly worse: with clasp, git *is* the source of truth
+(`clasp push`/`clasp pull` against the real project ID) instead of a manually
+maintained mirror, and a sync is one command instead of copy-pasting N files
+and hoping none were missed. `@google/clasp` is a devDependency of this repo
+(`npm install` pulls it in) so everyone runs the same version via `npx`/`npm
+run` instead of a global install.
 
-A few things worth knowing before adopting it:
+A few things worth knowing before using it:
 
-- **The first step is a real, one-time reconciliation, not automation.**
-  `clasp clone` against the actual live script ID will pull down whatever's
-  *really* deployed right now — which may not match this repo's mirror,
-  especially since none of this session's fixes have been copied into the
-  live editor yet. That diff needs a careful manual look once, before anyone
-  ever runs `clasp push` for real.
+- **The first pull is a real, one-time reconciliation, not automation.**
+  Cloning against the actual live script ID pulls down whatever's *really*
+  deployed right now — which may not match this repo's mirror if anyone has
+  edited live in the browser since the last manual copy. That diff needs a
+  careful manual look once, before anyone runs `clasp:push` for real.
 - **Script Properties (`REGISTRATION_INGEST_TOKEN`, `INGEST_ALERT_EMAIL`) are
   not part of the pushed/pulled files** — they're a separate per-project
   key/value store, so clasp syncing source code can't accidentally leak or
   overwrite them.
+- **`.claspignore`** in this directory allowlists `appsscript.json` and
+  `*.gs` only, so `clasp push` never tries to upload this `README.md` (or
+  anything else non-script) as project source.
 - **`clasp push` updates HEAD, not the pinned Web App version.** That's
   actually a good fit for what's already set up: HEAD is what every
   time-driven and simple trigger always runs anyway (see the earlier
-  discussion of the Executions log), so auto-pushing keeps `Sync.gs`/`Repair.gs`/`Admin.gs`
-  current automatically without touching the live Tito webhook, which stays
-  pinned to Version 1 until someone deliberately runs `clasp deploy`.
+  discussion of the Executions log), so pushing keeps `Sync.gs`/`Repair.gs`/
+  `Admin.gs` current automatically without touching the live Tito webhook,
+  which stays pinned to Version 1 until someone deliberately creates a new
+  deployment.
 
-**Can this run in GitHub Actions?** Yes — this is a common, well-documented
-pattern:
+### One-time local setup (do this before anything else)
 
-1. One person runs `clasp login` once, from a real browser, with a Google
-   account that has edit access to this Apps Script project. This produces a
-   local credentials file (`~/.clasprc.json`) — **this step needs a human;
-   it's an interactive OAuth consent flow, not something that can be scripted
-   or done on someone's behalf.**
-2. That file's contents get stored as a GitHub Actions secret (e.g.
-   `CLASP_CREDENTIALS`).
-3. A workflow (triggered on push to this branch/path, or manually) recreates
+The npm scripts above assume `.clasp.json` already exists in this directory,
+which requires a one-time setup that only a human with edit access to the
+live Apps Script project can do — none of it can be scripted or done on
+someone's behalf:
+
+1. **Enable the Apps Script API** for your account at
+   https://script.google.com/home/usersettings (a toggle, off by default) —
+   clasp can't create/push projects until this is on.
+2. **`npm run clasp:login`** — opens a real browser for Google OAuth consent.
+   Use a Google account that has edit access to the `ADMIN - Speed Shuffle
+   Score Tracker` sheet's Apps Script project.
+3. **Find the live script ID.** Open the ADMIN sheet → Extensions → Apps
+   Script; the URL is `https://script.google.com/.../projects/<SCRIPT_ID>/edit`.
+   (`npx clasp list-scripts`, after step 2, also lists every Apps Script
+   project the logged-in account can see, including this one, without
+   needing to open the sheet.)
+4. **Clone it into this directory** to generate `.clasp.json`:
+   ```sh
+   npx clasp clone <SCRIPT_ID> --rootDir google-apps-script/registration-sync
+   ```
+   Run this from the repo root. It writes `.clasp.json` (script ID + root
+   dir — not secret, safe to commit) and pulls down whatever's actually live,
+   including `appsscript.json`, which doesn't exist in this mirror yet.
+5. **Reconcile by hand, once.** Diff what `clone` just pulled against
+   `Admin.gs`/`Columns.gs`/`Config.gs`/`ErrorLog.gs`/`Ingest.gs`/`Repair.gs`/
+   `Sync.gs` in this directory. If the live project already matches this
+   mirror (expected, since PR #2 was manually copied in), the diff should be
+   empty or near-empty. If it isn't, that's real drift to understand before
+   trusting `clasp:push` to overwrite it.
+6. From then on, `npm run clasp:pull` / `npm run clasp:push` keep this
+   directory and the live project in sync.
+
+### Can this run in GitHub Actions?
+
+Yes — this is a common, well-documented pattern, intentionally not set up
+yet (local-first, per the plan above):
+
+1. The `clasp login` from step 2 above produces `~/.clasprc.json`. Its
+   contents get stored as a GitHub Actions secret (e.g. `CLASP_CREDENTIALS`).
+2. A workflow (triggered on push to this branch/path, or manually) recreates
    `~/.clasprc.json` from the secret and runs `clasp push` from
    `google-apps-script/registration-sync/`.
-4. Optionally, a separate manually-triggered (`workflow_dispatch`) job runs
-   `clasp deploy` to cut a new Web App version — kept manual on purpose, so
-   the Tito webhook only changes when someone deliberately decides it should.
+3. Optionally, a separate manually-triggered (`workflow_dispatch`) job
+   creates a new deployment to cut a new Web App version — kept manual on
+   purpose, so the Tito webhook only changes when someone deliberately
+   decides it should.
 
-I can write that workflow file once the initial `clasp clone`/reconciliation
-and the one-time `clasp login` have happened — those two steps need to come
-first and need a human with access to the live Google account.
+That workflow file is future work once local clasp (above) is reconciled and
+proven out.
