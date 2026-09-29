@@ -18,7 +18,7 @@ this has no effect on behavior, locking, or Script Properties:
 | `Config.gs` | Every top-level constant: sheet/menu names, the canonical header list, the five club workbook IDs. |
 | `Columns.gs` | Header-name column resolution (`resolveColumns_`) — shared by every other file. |
 | `Repair.gs` | Sheet formatting/protection setup — the "Repair All Sheets" menu item. |
-| `Sync.gs` | Club → Master sync and its 1-minute time trigger. |
+| `Sync.gs` | Club → Master sync and its 10-minute time trigger. |
 | `Ingest.gs` | The Tito webhook (`doPost`) and registration upsert. |
 | `ErrorLog.gs` | The `System Errors` sheet and optional email alert, shared by `Sync.gs` and `Ingest.gs`. |
 | `Admin.gs` | The custom menu, `onEdit`, the one-time `public_display` migration, and the manual `TEST_*`/`verifySystem` helpers. |
@@ -42,8 +42,8 @@ files listed above):
    data validation, the `total_score` formula, and range protections across the
    MASTER sheet and all five club sheets, so club admins can only edit `E:I`
    and the identity/total/registration columns stay locked.
-2. **Club → Master sync** (`syncFromClubsNow`, installed on a 1-minute
-   time trigger via `installOneMinuteSyncTrigger`) — matches club sheet rows to
+2. **Club → Master sync** (`syncFromClubsNow`, installed on a 10-minute
+   time trigger via `installSyncTrigger`) — matches club sheet rows to
    MASTER rows by `registration_id`, copies `attempt_status` and the four end
    scores, and auto-checks `public_display` the first time a row transitions to
    `completed`. It never copies `public_display` from a club sheet, so a manual
@@ -57,10 +57,10 @@ files listed above):
 
 ## Column resolution
 
-Every read/write in the sync and ingest paths looks up each of the 12 required
-column headers (`first_name`, `last_initial`, `club`, `registered_at`,
+Every read/write in the sync and ingest paths looks up each of the 13 required
+column headers (`first_name`, `last_name`, `club`, `registered_at`,
 `attempt_status`, `end_1_score`…`end_4_score`, `total_score`, `public_display`,
-`registration_id`) **by name**, via `resolveColumns_(sheet)`, instead of
+`registration_id`, `email`) **by name**, via `resolveColumns_(sheet)`, instead of
 assuming fixed letters. This was the fix for a real fragility: previously every
 function referenced hardcoded column numbers, so a club admin inserting,
 deleting, or reordering a column on their own sheet would silently misalign
@@ -70,7 +70,7 @@ field, both on that club's sheet and (once synced) on MASTER.
 As a result:
 
 - **Reordering columns, or adding extra ones anywhere, is safe.** A club can
-  add a "team name" column, or have their 12 required headers in a different
+  add a "team name" column, or have their 13 required headers in a different
   order than MASTER, and ingest/sync still find the right column each time.
 - **Renaming, deleting, or duplicating a required header is not silently
   tolerated — it fails loudly instead.** `resolveColumns_` throws a specific
@@ -78,7 +78,7 @@ As a result:
   flows into the same failure path described below (logged to `System Errors`,
   optionally emailed) rather than writing to the wrong column.
 - **`prepareAllSheets` (the repair tool) is stricter on purpose**: it requires
-  the canonical A:L order exactly (`assertCanonicalColumnOrder_`) and refuses
+  the canonical A:M order exactly (`assertCanonicalColumnOrder_`) and refuses
   to touch a sheet that's missing a header or already out of canonical order,
   rather than guessing how to reformat it. It also bootstraps the canonical
   header row on a sheet whose row 1 is completely blank (new sheet setup), but

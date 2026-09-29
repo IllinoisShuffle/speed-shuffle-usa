@@ -205,23 +205,23 @@ function splitName_(name) {
   if (!parts.length) {
     return {
       first_name: 'Unknown',
-      last_initial: ''
+      last_name: ''
     };
   }
 
   if (parts.length === 1) {
     return {
       first_name: parts[0],
-      last_initial: ''
+      last_name: ''
     };
   }
 
   return {
     first_name: parts[0],
-    last_initial:
-      parts[
-        parts.length - 1
-      ].charAt(0)
+    last_name:
+      parts
+        .slice(1)
+        .join(' ')
   };
 }
 
@@ -333,10 +333,14 @@ function mapTitoPayloadToRegistration_(
     firstName
       ? {
           first_name: firstName,
-          last_initial:
-            lastName.charAt(0)
+          last_name: lastName
         }
       : splitName_(ticket.name);
+
+  var email =
+    String(
+      ticket.email || ''
+    ).trim();
 
   var state =
     String(
@@ -367,15 +371,16 @@ function mapTitoPayloadToRegistration_(
       registrationId,
     first_name:
       names.first_name,
-    last_initial:
-      names.last_initial,
+    last_name:
+      names.last_name,
     club: clubId,
     registered_at:
       registeredAt || undefined,
     attempt_status:
       voided
         ? 'cancelled'
-        : 'registered'
+        : 'registered',
+    email: email
   };
 }
 
@@ -495,9 +500,9 @@ function buildRegistrationFields_(
         registration.first_name || ''
       ).trim(),
 
-    last_initial:
+    last_name:
       String(
-        registration.last_initial || ''
+        registration.last_name || ''
       ).trim(),
 
     club: clubId,
@@ -530,7 +535,12 @@ function buildRegistrationFields_(
     end_4_score:
       registration.end_4_score !== undefined
         ? registration.end_4_score
-        : ''
+        : '',
+
+    email:
+      String(
+        registration.email || ''
+      ).trim()
   };
 }
 
@@ -605,10 +615,10 @@ function upsertRegistrationRow_(
   sheet
     .getRange(
       targetRow,
-      cols.LAST
+      cols.LAST_NAME
     )
     .setValue(
-      fields.last_initial
+      fields.last_name
     );
 
   sheet
@@ -715,6 +725,15 @@ function upsertRegistrationRow_(
     )
     .setValue(
       registrationId
+    );
+
+  sheet
+    .getRange(
+      targetRow,
+      cols.EMAIL
+    )
+    .setValue(
+      fields.email
     );
 
   return targetRow;

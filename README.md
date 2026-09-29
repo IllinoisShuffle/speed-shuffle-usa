@@ -76,7 +76,9 @@ unique. Required column names:
 
 - `registration_id`: unique stable text ID per player/attempt.
 - `first_name`: only the first word is displayed publicly.
-- `last_initial`: one letter (an optional trailing period is accepted).
+- `last_name`: the player's real last name, needed to run the event. Only its
+  first letter is ever exposed publicly — the site derives that initial itself,
+  it is never stored pre-truncated.
 - `club`: `chicago`, `brooklyn`, `st-pete`, `tampa`, or `beachside`.
 - `attempt_status`: `registered`, `completed`, or `cancelled`.
 - `total_score`: numeric whole-number total; required when completed. Zero and
@@ -86,7 +88,9 @@ unique. Required column names:
   and overall ranks; ranks may therefore have gaps.
 
 Additional layout columns: `registered_at`, `end_1_score`, `end_2_score`,
-`end_3_score`, and `end_4_score`. The website never returns individual end scores.
+`end_3_score`, `end_4_score`, and `email`. The website never returns individual
+end scores, and never reads or returns `email` at all — it exists purely for
+event administration.
 
 In the prepared test sheet, columns G:J hold the four ends. K2 contains one
 ARRAYFORMULA calculating totals for all rows once all four ends are populated.
@@ -134,7 +138,7 @@ pushed, linked, or deployed by this implementation.
 
 Tito registration ingest and club-sheet-to-master aggregation are implemented,
 but outside this repo: a Google Apps Script project bound to the ADMIN master
-sheet runs a `doPost` webhook that Tito calls on ticket events, plus a 1-minute
+sheet runs a `doPost` webhook that Tito calls on ticket events, plus a 10-minute
 club→master sync trigger. See `google-apps-script/registration-sync/` for a
 mirrored copy of that source and how it works. Lauren can still create her own
 test sheets using the same layout; the application is not dependent on her sheet

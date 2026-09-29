@@ -24,7 +24,7 @@ function onOpen() {
     )
     .addItem(
       'Install Automatic Sync (One-Time Setup)',
-      'installOneMinuteSyncTrigger'
+      'installSyncTrigger'
     )
     .addItem(
       'Reset Public Display To Match Status (Overwrites Manual Changes)',
@@ -307,14 +307,16 @@ function TEST_addBrooklynRegistration() {
         'test-ny-003',
       first_name:
         'Jack',
-      last_initial:
-        'B',
+      last_name:
+        'Brooks',
       club:
         'brooklyn',
       registered_at:
         '2026-09-15',
       attempt_status:
-        'registered'
+        'registered',
+      email:
+        'jack.brooks@example.com'
     });
 
   safeAlert_(
@@ -338,6 +340,7 @@ function TEST_titoBrooklynTicket() {
     slug: 'test-tito-brooklyn-001',
     first_name: 'Tito',
     last_name: 'Test',
+    email: 'tito.test@example.com',
     release_slug: 'brooklyn',
     release_title: 'Brooklyn Club',
     updated_at: '2026-09-23T12:00:00.000Z'
@@ -461,14 +464,16 @@ function TEST_addStPeteRegistration() {
         'test-sp-003',
       first_name:
         'Sunny',
-      last_initial:
-        'R',
+      last_name:
+        'Reyes',
       club:
         'st-pete',
       registered_at:
         '2026-09-15',
       attempt_status:
-        'registered'
+        'registered',
+      email:
+        'sunny.reyes@example.com'
     });
 
   safeAlert_(

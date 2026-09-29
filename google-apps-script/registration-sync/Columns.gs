@@ -12,7 +12,7 @@
    ========================================================= */
 
 /*
- * Reads row 1 of `sheet` and returns { FIRST: n, LAST: n, ... } mapping
+ * Reads row 1 of `sheet` and returns { FIRST: n, LAST_NAME: n, ... } mapping
  * each HEADER_KEYS entry to the actual 1-based column number where its
  * HEADER_ORDER text currently lives — wherever that is, in whatever
  * order. Throws a descriptive Error if a required header is missing or
@@ -99,8 +99,8 @@ function resolveColumns_(sheet) {
 
 
 /*
- * Like resolveColumns_(), but also requires the 12 headers to be in
- * the exact canonical A:L order. Only prepareAllSheets() uses this —
+ * Like resolveColumns_(), but also requires the 13 headers to be in
+ * the exact canonical A:M order. Only prepareAllSheets() uses this —
  * it's a repair tool, not a live data path, so it's allowed to be
  * stricter and simply refuse to touch a sheet whose columns have
  * already drifted, rather than guessing how to fix it.
@@ -120,7 +120,7 @@ function assertCanonicalColumnOrder_(sheet) {
       sheet.getName() +
       '" (' +
       sheet.getParent().getName() +
-      ') has all required headers, but not in the canonical A:L order. ' +
+      ') has all required headers, but not in the canonical A:M order. ' +
       'Restore the original column order before repairing, or reorder ' +
       'the columns by hand — this tool will not do it automatically.'
     );
