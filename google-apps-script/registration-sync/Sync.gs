@@ -8,14 +8,17 @@
  * mid-sync can't interleave and corrupt a row.
  *
  * MASTER reads/writes are batched per club, one call per sync-owned
- * column (STATUS, E1-E4, PUBLIC), instead of one getValue/setValue
+ * column (STATUS, E1-E4, and PUBLIC), instead of one getValue/setValue
  * pair per matched row. Each column is read fresh right before a
  * club's rows are applied to it and written back in full immediately
  * after — so a club's update is durably committed before the next
  * club runs (matching the old row-by-row commit granularity: one
  * club's broken data can't roll back an already-applied club), while
  * turning what used to be ~6 round trips per matched registrant into
- * 12 round trips per club, regardless of registrant count.
+ * 10 round trips per club (STATUS/E1-E4 always; PUBLIC is read/written
+ * only if this club actually has a first-time transition to completed
+ * this run — it's never sourced from the club sheet, so there's
+ * nothing to snapshot otherwise), regardless of registrant count.
  */
 
 
@@ -232,15 +235,15 @@ function syncFromClubsNow_() {
         )
         .getValues();
 
-    var masterPublic =
-      master
-        .getRange(
-          2,
-          masterCols.PUBLIC,
-          masterRowCount,
-          1
-        )
-        .getValues();
+    /*
+     * public_display is never read from the club sheet and never
+     * inspected for its current value — it's only ever force-set to
+     * true on a first transition into completed. So unlike the five
+     * columns above, there's nothing to snapshot until a transition
+     * actually happens: read it lazily, on the first one found in
+     * this club's rows, and only write it back if at least one did.
+     */
+    var masterPublic = null;
 
     rows.forEach(function(row) {
       var registrationId =
@@ -315,6 +318,18 @@ function syncFromClubsNow_() {
         previousStatus !== 'completed' &&
         incomingStatus === 'completed'
       ) {
+        if (!masterPublic) {
+          masterPublic =
+            master
+              .getRange(
+                2,
+                masterCols.PUBLIC,
+                masterRowCount,
+                1
+              )
+              .getValues();
+        }
+
         masterPublic[i][0] = true;
       }
 
@@ -366,14 +381,16 @@ function syncFromClubsNow_() {
       )
       .setValues(masterE4);
 
-    master
-      .getRange(
-        2,
-        masterCols.PUBLIC,
-        masterRowCount,
-        1
-      )
-      .setValues(masterPublic);
+    if (masterPublic) {
+      master
+        .getRange(
+          2,
+          masterCols.PUBLIC,
+          masterRowCount,
+          1
+        )
+        .setValues(masterPublic);
+    }
   });
 
   SpreadsheetApp.flush();
