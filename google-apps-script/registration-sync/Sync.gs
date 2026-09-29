@@ -6,6 +6,16 @@
  * public_display from a club sheet. Shares LockService.getScriptLock()
  * with addRegistration() in Ingest.gs so a Tito webhook landing
  * mid-sync can't interleave and corrupt a row.
+ *
+ * MASTER reads/writes are batched per club, one call per sync-owned
+ * column (STATUS, E1-E4, PUBLIC), instead of one getValue/setValue
+ * pair per matched row. Each column is read fresh right before a
+ * club's rows are applied to it and written back in full immediately
+ * after — so a club's update is durably committed before the next
+ * club runs (matching the old row-by-row commit granularity: one
+ * club's broken data can't roll back an already-applied club), while
+ * turning what used to be ~6 round trips per matched registrant into
+ * 12 round trips per club, regardless of registrant count.
  */
 
 
@@ -58,12 +68,15 @@ function syncFromClubsNow_() {
       2
     );
 
+  var masterRowCount =
+    masterLastRow - 1;
+
   var masterIds =
     master
       .getRange(
         2,
         masterCols.REG_ID,
-        masterLastRow - 1,
+        masterRowCount,
         1
       )
       .getValues();
@@ -162,6 +175,73 @@ function syncFromClubsNow_() {
         )
         .getValues();
 
+    /*
+     * One bulk snapshot per sync-owned MASTER column, read fresh right
+     * before this club's rows are applied — so it reflects whatever
+     * an earlier club in this same run already wrote. Each column is
+     * read/written on its own resolved index, never assuming STATUS
+     * through PUBLIC are contiguous.
+     */
+    var masterStatus =
+      master
+        .getRange(
+          2,
+          masterCols.STATUS,
+          masterRowCount,
+          1
+        )
+        .getValues();
+
+    var masterE1 =
+      master
+        .getRange(
+          2,
+          masterCols.E1,
+          masterRowCount,
+          1
+        )
+        .getValues();
+
+    var masterE2 =
+      master
+        .getRange(
+          2,
+          masterCols.E2,
+          masterRowCount,
+          1
+        )
+        .getValues();
+
+    var masterE3 =
+      master
+        .getRange(
+          2,
+          masterCols.E3,
+          masterRowCount,
+          1
+        )
+        .getValues();
+
+    var masterE4 =
+      master
+        .getRange(
+          2,
+          masterCols.E4,
+          masterRowCount,
+          1
+        )
+        .getValues();
+
+    var masterPublic =
+      master
+        .getRange(
+          2,
+          masterCols.PUBLIC,
+          masterRowCount,
+          1
+        )
+        .getValues();
+
     rows.forEach(function(row) {
       var registrationId =
         String(
@@ -187,6 +267,9 @@ function syncFromClubsNow_() {
         return;
       }
 
+      var i =
+        masterRow - 2;
+
       var incomingStatus =
         String(
           row[clubCols.STATUS - 1] || ''
@@ -196,65 +279,30 @@ function syncFromClubsNow_() {
 
       var previousStatus =
         String(
-          master
-            .getRange(
-              masterRow,
-              masterCols.STATUS
-            )
-            .getValue() || ''
+          masterStatus[i][0] || ''
         )
           .trim()
           .toLowerCase();
 
       /*
-       * Copy only attempt_status + the four end scores.
-       * Each field is written to its own resolved column, since
-       * the two sheets' column orders are not assumed to match.
+       * Copy only attempt_status + the four end scores, into the
+       * in-memory column snapshots — written back to the sheet once,
+       * after every row in this club has been applied.
        */
-      master
-        .getRange(
-          masterRow,
-          masterCols.STATUS
-        )
-        .setValue(
-          row[clubCols.STATUS - 1]
-        );
+      masterStatus[i][0] =
+        row[clubCols.STATUS - 1];
 
-      master
-        .getRange(
-          masterRow,
-          masterCols.E1
-        )
-        .setValue(
-          row[clubCols.E1 - 1]
-        );
+      masterE1[i][0] =
+        row[clubCols.E1 - 1];
 
-      master
-        .getRange(
-          masterRow,
-          masterCols.E2
-        )
-        .setValue(
-          row[clubCols.E2 - 1]
-        );
+      masterE2[i][0] =
+        row[clubCols.E2 - 1];
 
-      master
-        .getRange(
-          masterRow,
-          masterCols.E3
-        )
-        .setValue(
-          row[clubCols.E3 - 1]
-        );
+      masterE3[i][0] =
+        row[clubCols.E3 - 1];
 
-      master
-        .getRange(
-          masterRow,
-          masterCols.E4
-        )
-        .setValue(
-          row[clubCols.E4 - 1]
-        );
+      masterE4[i][0] =
+        row[clubCols.E4 - 1];
 
       /*
        * Auto-publish only on FIRST
@@ -267,16 +315,65 @@ function syncFromClubsNow_() {
         previousStatus !== 'completed' &&
         incomingStatus === 'completed'
       ) {
-        master
-          .getRange(
-            masterRow,
-            masterCols.PUBLIC
-          )
-          .setValue(true);
+        masterPublic[i][0] = true;
       }
 
       updated++;
     });
+
+    master
+      .getRange(
+        2,
+        masterCols.STATUS,
+        masterRowCount,
+        1
+      )
+      .setValues(masterStatus);
+
+    master
+      .getRange(
+        2,
+        masterCols.E1,
+        masterRowCount,
+        1
+      )
+      .setValues(masterE1);
+
+    master
+      .getRange(
+        2,
+        masterCols.E2,
+        masterRowCount,
+        1
+      )
+      .setValues(masterE2);
+
+    master
+      .getRange(
+        2,
+        masterCols.E3,
+        masterRowCount,
+        1
+      )
+      .setValues(masterE3);
+
+    master
+      .getRange(
+        2,
+        masterCols.E4,
+        masterRowCount,
+        1
+      )
+      .setValues(masterE4);
+
+    master
+      .getRange(
+        2,
+        masterCols.PUBLIC,
+        masterRowCount,
+        1
+      )
+      .setValues(masterPublic);
   });
 
   SpreadsheetApp.flush();
