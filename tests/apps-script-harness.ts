@@ -147,7 +147,12 @@ export function loadRegistrationSync() {
     },
     MailApp: { sendEmail: (to: string, subject: string, body: string) => { mail.push({ to, subject, body }); } },
     Logger: { log: (msg: unknown) => { logs.push(String(msg)); } },
-    console: { log: (msg: unknown) => { logs.push(String(msg)); } },
+    console: {
+      log: (msg: unknown) => { logs.push(String(msg)); },
+      error: (msg: unknown) => { logs.push(String(msg)); },
+      warn: (msg: unknown) => { logs.push(String(msg)); },
+      info: (msg: unknown) => { logs.push(String(msg)); },
+    },
     ScriptApp: {
       getProjectTriggers: () => [...triggers],
       newTrigger: (handlerFunction: string) => ({
