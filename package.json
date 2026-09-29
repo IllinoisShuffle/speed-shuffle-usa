@@ -14,7 +14,12 @@
     "preview": "astro preview",
     "astro": "astro",
     "dev:astro": "ASTRO_DEV_BACKGROUND=1 astro dev --port 4322",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "clasp:login": "clasp login",
+    "clasp:status": "clasp status --project google-apps-script/registration-sync",
+    "clasp:pull": "clasp pull --project google-apps-script/registration-sync",
+    "clasp:push": "clasp push --project google-apps-script/registration-sync",
+    "clasp:open": "clasp open-container --project google-apps-script/registration-sync"
   },
   "dependencies": {
     "astro": "7.3.2",
@@ -23,6 +28,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
+    "@google/clasp": "^3.4.1",
     "@types/node": "^22.12.0",
     "netlify-cli": "23.13.5",
     "typescript": "5.9.3"

@@ -1,0 +1,5 @@
+# Allowlist: ignore everything, then un-ignore the file types Apps Script
+# actually runs. Keeps README.md and any other repo docs out of `clasp push`.
+**/**
+!appsscript.json
+!*.gs
