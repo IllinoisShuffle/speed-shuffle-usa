@@ -49,6 +49,18 @@ function logSystemError_(
   rawContents,
   err
 ) {
+  // console.error (not Logger.log) is what Cloud Logging actually
+  // ingests now that this project is on a standard GCP project.
+  console.error(
+    '[' +
+    source +
+    '] ' +
+    String(
+      (err && err.message) ||
+      err
+    )
+  );
+
   try {
     ensureSystemErrorSheet_()
       .appendRow([
