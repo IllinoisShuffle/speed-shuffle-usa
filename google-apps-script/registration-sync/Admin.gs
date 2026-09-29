@@ -330,8 +330,8 @@ function TEST_addStPeteRegistration() {
 
 /*
  * Diagnostic for "System Errors showed up but no alert email arrived."
- * Sends a real email directly via MailApp — not through
- * notifySystemFailure_ — so success/failure surfaces immediately in a
+ * Sends a real email directly via MailApp, not through
+ * notifySystemFailure_, so success/failure surfaces immediately in a
  * UI dialog instead of being swallowed into Logger.log, and so it's
  * never blocked by the per-source cooldown in ErrorLog.gs. The
  * recipient string's length is included so invisible leading/trailing
@@ -353,25 +353,27 @@ function TEST_alertEmailDelivery() {
   var stamp =
     new Date().toISOString();
 
+  var recipientNote =
+    'recipient [' + alertEmail + '] length ' +
+    alertEmail.length;
+
   try {
     MailApp.sendEmail(
       alertEmail,
-      'Speed Shuffle: test alert ' + stamp,
+      'Speed Shuffle test alert ' + stamp,
       'Manual test of the System Errors alert email path, sent ' +
-      stamp +
-      ' to "' + alertEmail + '" (length ' + alertEmail.length + ').'
+      stamp + ' to ' + recipientNote + '.'
     );
 
     safeAlert_(
-      'Test email sent to "' + alertEmail + '" ' +
-      '(length ' + alertEmail.length + ') at ' + stamp + '.\n\n' +
-      'Check that inbox now — All Mail, Spam, Trash, and the ' +
-      'Promotions/Updates tabs, not just Inbox — for subject ' +
-      '"Speed Shuffle: test alert ' + stamp + '".'
+      'Test email sent. ' + recipientNote + ' at ' + stamp + '. ' +
+      'Check that inbox now: All Mail, Spam, Trash, and the ' +
+      'Promotions/Updates tabs, not just Inbox, for subject ' +
+      'Speed Shuffle test alert ' + stamp + '.'
     );
   } catch (err) {
     safeAlert_(
-      'Test email FAILED to send to "' + alertEmail + '":\n\n' +
+      'Test email FAILED to send. ' + recipientNote + '. Error: ' +
       ((err && err.message) || err)
     );
   }
