@@ -439,9 +439,10 @@ reordering, missing/duplicate/canonical-order header handling, Tito payload
 mapping (including club aliases and voided/cancelled tickets),
 `addRegistration` idempotency and column-agnostic writes to two
 differently-ordered sheets, the non-contiguous `total_score` formula,
-`public_display` preservation, `syncFromClubsNow_`'s partial-club-failure
-isolation and unmatched-ID surfacing, the "only auto-publish on the first
-completion" rule, and `doPost`'s auth/success/failure-logging paths. This
+`hide_publicly` preservation, `syncFromClubsNow_`'s partial-club-failure
+isolation and unmatched-ID surfacing, the "sync never touches
+`hide_publicly`, in either direction" guarantee, and `doPost`'s
+auth/success/failure-logging paths. This
 runs via the same `npm test` as the rest of the repo, so it's covered by
 `.github/workflows/ci.yml` on every push and PR.
 
