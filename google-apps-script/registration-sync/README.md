@@ -50,7 +50,11 @@ files listed above):
    the public site the moment `attempt_status` flips to `completed`, purely
    via the site's own query (`netlify/lib/standings.ts`). `hide_publicly` is
    Lauren's manual tool alone, on MASTER only, for hiding one specific
-   completed player.
+   completed player. **Pause Automatic Sync** (`pauseSyncTrigger`) deletes the
+   trigger without touching sheet data or the Tito webhook — use it to stop
+   `System Errors` filling up with the same failure every run while a
+   header/schema mismatch is being fixed by hand (see "Outstanding risks"
+   below); re-running **Install Automatic Sync** resumes it.
 3. **Tito registration ingest** (`doPost`, `mapTitoPayloadToRegistration_`,
    `addRegistration`) — the actual Tito integration. A Tito webhook posts ticket
    events to this script's deployed Web App URL; the handler verifies a shared
@@ -278,6 +282,21 @@ discovering during the tournament:
   (both Tito ingest and club→master sync) stops with no external monitoring
   — only the in-sheet error log and (if configured) email alert, which
   themselves depend on the same account being able to run code at all.
+- **A schema change (new/renamed required header) needs Manager-role access
+  to actually apply, not just Content Manager.** `applyProtections_`
+  deliberately protects the entire header row and every identity/total/
+  registration_id/email column, stripping all editors from those
+  protections on purpose (see "Editing/pushing vs. deploying" above for the
+  same Manager-vs-Content-Manager split) — so editing/clearing the header
+  row itself needs the same Manager-tier access as deploying, not just
+  script-edit access. `resolveColumns_`/`assertCanonicalColumnOrder_` both
+  fail loudly (not silently) until the sheet headers actually match code,
+  so a schema change landing on `main` before someone with that access has
+  updated the live sheets means every ingest/sync call fails starting
+  immediately once `clasp push` lands it on HEAD — this happened for real
+  with the `last_name`/`email` change. **Pause Automatic Sync** (Sync.gs)
+  stops the resulting `System Errors` spam without needing that access
+  tier; fixing the headers still does.
 - **Docs/code drift.** The `.gs` files in this repo are a manually maintained
   mirror of what's actually deployed in the Apps Script editor. Nothing
   enforces that future edits made live in the editor get copied back here —

@@ -98,6 +98,8 @@ type RegistrationSyncApi = {
   mapTitoPayloadToRegistration_(payload: Record<string, unknown>, webhookEvent: string): Registration;
   addRegistration(registration: Registration): { registration_id: string; club: string; master_row: number; club_row: number };
   syncFromClubsNow_(): void;
+  installSyncTrigger(): void;
+  pauseSyncTrigger(): void;
   doPost(e: { parameter?: Record<string, string>; postData?: { contents: string } }): { getContent(): string };
 };
 
@@ -110,6 +112,7 @@ export function loadRegistrationSync() {
   const mail: { to: string; subject: string; body: string }[] = [];
   const properties = new Map<string, string>();
   const logs: string[] = [];
+  const triggers: { getHandlerFunction(): string }[] = [];
   const source = FILES.map((f) => fs.readFileSync(path.join(SCRIPT_DIR, f), 'utf8')).join('\n;\n');
 
   const sandbox: Record<string, unknown> = {
@@ -142,9 +145,20 @@ export function loadRegistrationSync() {
     MailApp: { sendEmail: (to: string, subject: string, body: string) => { mail.push({ to, subject, body }); } },
     Logger: { log: (msg: unknown) => { logs.push(String(msg)); } },
     ScriptApp: {
-      getProjectTriggers: () => [],
-      newTrigger: () => ({ timeBased() { return this; }, everyMinutes() { return this; }, create() {} }),
-      deleteTrigger: () => {},
+      getProjectTriggers: () => [...triggers],
+      newTrigger: (handlerFunction: string) => ({
+        timeBased() { return this; },
+        everyMinutes() { return this; },
+        create() {
+          const trigger = { getHandlerFunction: () => handlerFunction };
+          triggers.push(trigger);
+          return trigger;
+        },
+      }),
+      deleteTrigger: (trigger: { getHandlerFunction(): string }) => {
+        const i = triggers.indexOf(trigger);
+        if (i !== -1) triggers.splice(i, 1);
+      },
     },
   };
 
@@ -174,5 +188,5 @@ export function loadRegistrationSync() {
 
   const systemErrors = (): FakeSheet | null => admin.getSheetByName(fns.SYSTEM_ERROR_SHEET);
 
-  return { fns, admin, mail, properties, logs, seedMaster, seedClub, clubSheet, systemErrors };
+  return { fns, admin, mail, properties, logs, triggers, seedMaster, seedClub, clubSheet, systemErrors };
 }

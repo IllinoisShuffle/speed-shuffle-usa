@@ -198,3 +198,21 @@ test('repeated failures of the same source log every time but email only once pe
   assert.equal(systemErrors()!.getLastRow(), 3); // header + two logged failures
   assert.equal(mail.length, 1); // but only the first sent an email
 });
+
+test('pauseSyncTrigger removes an installed sync trigger; installSyncTrigger resumes it', () => {
+  const { fns, triggers } = loadRegistrationSync();
+  assert.equal(triggers.length, 0);
+
+  fns.pauseSyncTrigger(); // nothing installed yet -- must not throw
+  assert.equal(triggers.length, 0);
+
+  fns.installSyncTrigger();
+  assert.equal(triggers.length, 1);
+  assert.equal(triggers[0].getHandlerFunction(), 'syncFromClubsNow');
+
+  fns.pauseSyncTrigger();
+  assert.equal(triggers.length, 0);
+
+  fns.installSyncTrigger(); // resume
+  assert.equal(triggers.length, 1);
+});

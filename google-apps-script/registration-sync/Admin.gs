@@ -25,6 +25,10 @@ function onOpen() {
       'Install Automatic Sync (One-Time Setup)',
       'installSyncTrigger'
     )
+    .addItem(
+      'Pause Automatic Sync',
+      'pauseSyncTrigger'
+    )
     .addToUi();
 }
 
