@@ -27,6 +27,16 @@
    ========================================================= */
 
 function syncFromClubsNow() {
+  if (
+    PropertiesService
+      .getScriptProperties()
+      .getProperty(
+        SYNC_PAUSED_PROPERTY
+      ) === 'true'
+  ) {
+    return;
+  }
+
   var lock =
     LockService.getScriptLock();
 
@@ -386,56 +396,16 @@ function syncFromClubsNow_() {
    AUTOMATIC 10-MINUTE TRIGGER
    ========================================================= */
 
-function installSyncTrigger() {
-  var handlerName =
-    'syncFromClubsNow';
-
-  ScriptApp
-    .getProjectTriggers()
-    .forEach(function(trigger) {
-      var handler =
-        trigger.getHandlerFunction();
-
-      if (
-        handler === handlerName ||
-        handler === 'FIX_syncFromClubsNow' ||
-        handler === 'syncFromClubs'
-      ) {
-        ScriptApp.deleteTrigger(
-          trigger
-        );
-      }
-    });
-
-  ScriptApp
-    .newTrigger(
-      handlerName
-    )
-    .timeBased()
-    .everyMinutes(10)
-    .create();
-
-  safeAlert_(
-    'Automatic club → Master sync installed for every 10 minutes.'
-  );
-}
-
-
 /*
- * Deletes any installed syncFromClubsNow trigger without installing a
- * replacement -- e.g. to stop System Errors from filling up with the
- * same failure every run while a header/schema mismatch is being
- * fixed by hand. Does not touch the Tito webhook (a separate,
- * deployment-pinned concern) or MASTER/club sheet data.
- *
- * Re-run "Install Automatic Sync (One-Time Setup)" from this same
- * menu to resume -- it already deletes-then-recreates, so it doubles
- * as "resume."
+ * Best-effort cleanup of old/renamed trigger handlers. Only ever finds
+ * (and can only ever delete) triggers owned by the *currently executing
+ * user's own account* -- ScriptApp.getProjectTriggers() cannot see
+ * triggers another user installed, even with full edit access to this
+ * project. installSyncTrigger()/pauseSyncTrigger() do not depend on
+ * this finding anything; SYNC_PAUSED_PROPERTY (Config.gs) is what
+ * actually gates syncFromClubsNow(), regardless of trigger ownership.
  */
-function pauseSyncTrigger() {
-  var handlerName =
-    'syncFromClubsNow';
-
+function deleteOwnSyncTriggers_() {
   var removed = 0;
 
   ScriptApp
@@ -445,7 +415,7 @@ function pauseSyncTrigger() {
         trigger.getHandlerFunction();
 
       if (
-        handler === handlerName ||
+        handler === 'syncFromClubsNow' ||
         handler === 'FIX_syncFromClubsNow' ||
         handler === 'syncFromClubs'
       ) {
@@ -457,10 +427,70 @@ function pauseSyncTrigger() {
       }
     });
 
+  return removed;
+}
+
+
+function installSyncTrigger() {
+  deleteOwnSyncTriggers_();
+
+  ScriptApp
+    .newTrigger(
+      'syncFromClubsNow'
+    )
+    .timeBased()
+    .everyMinutes(10)
+    .create();
+
+  PropertiesService
+    .getScriptProperties()
+    .deleteProperty(
+      SYNC_PAUSED_PROPERTY
+    );
+
   safeAlert_(
-    removed
-      ? 'Automatic club → Master sync paused. ' +
-        'Re-run "Install Automatic Sync" to resume.'
-      : 'No automatic sync trigger was installed -- nothing to pause.'
+    'Automatic club → Master sync installed for every 10 minutes ' +
+    '(and resumed, if it was paused).'
+  );
+}
+
+
+/*
+ * Pauses the club -> Master sync by setting SYNC_PAUSED_PROPERTY --
+ * syncFromClubsNow() checks it first and returns immediately, before
+ * even acquiring the lock. This works regardless of who originally
+ * installed the trigger (see deleteOwnSyncTriggers_ above for why that
+ * matters) -- e.g. to stop System Errors from filling up with the same
+ * failure every run while a header/schema mismatch is being fixed by
+ * hand. Does not touch MASTER/club sheet data or the Tito webhook (a
+ * separate, deployment-pinned concern).
+ *
+ * Re-run "Install Automatic Sync (One-Time Setup)" from this same menu
+ * to resume -- it clears this property in addition to reinstalling the
+ * trigger, so it doubles as "resume."
+ */
+function pauseSyncTrigger() {
+  PropertiesService
+    .getScriptProperties()
+    .setProperty(
+      SYNC_PAUSED_PROPERTY,
+      'true'
+    );
+
+  var removed =
+    deleteOwnSyncTriggers_();
+
+  safeAlert_(
+    'Automatic club → Master sync paused -- it will no-op the next ' +
+    'time it fires, even though the trigger itself may still be ' +
+    'listed under "Triggers" (only the account that installed it can ' +
+    'delete it there; this does not require that). ' +
+    'Re-run "Install Automatic Sync" to resume.' +
+    (
+      removed
+        ? ' (Also removed ' + removed + ' trigger(s) owned by your ' +
+          'own account.)'
+        : ''
+    )
   );
 }

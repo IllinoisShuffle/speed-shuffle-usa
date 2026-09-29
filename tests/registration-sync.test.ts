@@ -199,7 +199,7 @@ test('repeated failures of the same source log every time but email only once pe
   assert.equal(mail.length, 1); // but only the first sent an email
 });
 
-test('pauseSyncTrigger removes an installed sync trigger; installSyncTrigger resumes it', () => {
+test('pauseSyncTrigger removes any trigger owned by the current account; installSyncTrigger resumes it', () => {
   const { fns, triggers } = loadRegistrationSync();
   assert.equal(triggers.length, 0);
 
@@ -215,4 +215,27 @@ test('pauseSyncTrigger removes an installed sync trigger; installSyncTrigger res
 
   fns.installSyncTrigger(); // resume
   assert.equal(triggers.length, 1);
+});
+
+test('pauseSyncTrigger stops syncFromClubsNow via a Script Property, even with no trigger visible to this account', () => {
+  // Simulates the real failure: ScriptApp.getProjectTriggers() only
+  // returns triggers owned by the executing user, so someone else's
+  // installed trigger is invisible here -- `triggers` stays empty
+  // throughout, proving the pause doesn't depend on seeing it.
+  const { fns, seedMaster, seedClub, properties, triggers } = loadRegistrationSync();
+  seedMaster();
+  seedClub('brooklyn');
+  fns.pauseSyncTrigger();
+  assert.equal(triggers.length, 0);
+  assert.equal(properties.get('syncPaused'), 'true');
+
+  const cols = fns.resolveColumns_(fns.ensureMasterSheet_());
+  fns.ensureMasterSheet_().getRange(2, cols.REG_ID).setValue('t-1');
+  fns.ensureMasterSheet_().getRange(2, cols.STATUS).setValue('registered');
+
+  fns.syncFromClubsNow(); // paused -- must no-op, not even attempt the sync
+  assert.equal(fns.ensureMasterSheet_().getRange(2, cols.STATUS).getValue(), 'registered');
+
+  fns.installSyncTrigger(); // resume
+  assert.equal(properties.get('syncPaused'), undefined);
 });
