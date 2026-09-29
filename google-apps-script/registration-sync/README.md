@@ -354,6 +354,35 @@ someone's behalf:
 6. From then on, `npm run clasp:pull` / `npm run clasp:push` keep this
    directory and the live project in sync.
 
+### Editing/pushing vs. deploying need different accounts
+
+The ADMIN sheet lives in the illinoisshuffleboard.org **Shared Drive**, and
+Shared Drive items have no single Drive "owner" the way a My Drive file
+does — access is role-based instead (Manager, Content Manager, Contributor,
+etc.). Apps Script's Deploy action for a *container-bound* script still
+checks for something like traditional file ownership, and on a Shared Drive
+it falls back to requiring the Shared Drive's top **Manager** role. Content
+Manager — what Nick and John currently have — is enough for everything except
+that one action, confirmed by hitting a genuine "You do not have permission
+to perform this action" error (not an account mix-up, not a clasp/API
+limitation) on **New Deployment**. Jim has Manager and can deploy.
+
+In practice this splits cleanly into two tiers of access:
+
+- **`clasp login` / `clasp pull` / `clasp push` / editing code / running
+  `TEST_*`/`verifySystem` / managing triggers** — fine under any editor's
+  account (Nick's or John's). Importantly, **`clasp push` only updates HEAD**,
+  never the pinned Web App version (see above) — so pushing from a
+  Content-Manager account can't accidentally affect the live Tito webhook.
+  Changes just sit at HEAD until someone with Manager access deploys them.
+- **Creating or updating a deployment** (moving the live webhook onto newer
+  HEAD code) — needs Manager-role access on the Shared Drive. Today that
+  means asking Jim to do the actual Deploy click in the browser once code is
+  pushed to HEAD; he doesn't need clasp set up at all for this. The
+  alternative — getting Nick/John bumped to Manager, or added to whatever
+  Google Group gives Jim that tier — is a Shared Drive admin decision, not
+  something clasp or this repo can route around.
+
 ### Can this run in GitHub Actions?
 
 Yes — this is a common, well-documented pattern, intentionally not set up
@@ -367,7 +396,11 @@ yet (local-first, per the plan above):
 3. Optionally, a separate manually-triggered (`workflow_dispatch`) job
    creates a new deployment to cut a new Web App version — kept manual on
    purpose, so the Tito webhook only changes when someone deliberately
-   decides it should.
+   decides it should. **This job's stored credentials must belong to a
+   Manager-role account (e.g. Jim's), not just any editor** — the same Shared
+   Drive role requirement from the previous section applies to the Apps
+   Script API, not just the browser UI. The push-only credential (step 1)
+   doesn't need that tier.
 
 That workflow file is future work once local clasp (above) is reconciled and
 proven out.
