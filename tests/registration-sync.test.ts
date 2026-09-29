@@ -6,10 +6,10 @@ const ALL_CLUBS = ['brooklyn', 'chicago', 'st-pete', 'tampa', 'beachside'];
 
 test('resolveColumns_ finds every header by name regardless of order, ignores extra columns', () => {
   const { fns, seedMaster } = loadRegistrationSync();
-  const sheet = seedMaster(['registration_id', 'team_name', 'public_display', 'total_score', 'end_4_score', 'end_3_score', 'end_2_score', 'end_1_score', 'attempt_status', 'registered_at', 'club', 'last_name', 'first_name', 'email']);
+  const sheet = seedMaster(['registration_id', 'team_name', 'hide_publicly', 'total_score', 'end_4_score', 'end_3_score', 'end_2_score', 'end_1_score', 'attempt_status', 'registered_at', 'club', 'last_name', 'first_name', 'email']);
   const cols = fns.resolveColumns_(sheet);
-  assert.deepEqual({ REG_ID: cols.REG_ID, PUBLIC: cols.PUBLIC, E4: cols.E4, E1: cols.E1, FIRST: cols.FIRST, EMAIL: cols.EMAIL },
-    { REG_ID: 1, PUBLIC: 3, E4: 5, E1: 8, FIRST: 13, EMAIL: 14 });
+  assert.deepEqual({ REG_ID: cols.REG_ID, HIDE: cols.HIDE, E4: cols.E4, E1: cols.E1, FIRST: cols.FIRST, EMAIL: cols.EMAIL },
+    { REG_ID: 1, HIDE: 3, E4: 5, E1: 8, FIRST: 13, EMAIL: 14 });
 });
 
 test('resolveColumns_ fails loudly on a missing or duplicated required header', () => {
@@ -52,8 +52,8 @@ test('addRegistration writes each field (including email) to its resolved column
   const { fns, seedMaster, seedClub, clubSheet } = loadRegistrationSync();
   // 'email' appended after the original 12 so the E1..E4 letters used below
   // (D, F, H, J) are unaffected by its addition to the schema.
-  seedMaster(['first_name', 'registration_id', 'last_name', 'end_1_score', 'club', 'end_2_score', 'registered_at', 'end_3_score', 'attempt_status', 'end_4_score', 'total_score', 'public_display', 'email']);
-  seedClub('brooklyn', ['registration_id', 'club', 'first_name', 'last_name', 'registered_at', 'attempt_status', 'end_1_score', 'end_2_score', 'end_3_score', 'end_4_score', 'total_score', 'public_display', 'email']);
+  seedMaster(['first_name', 'registration_id', 'last_name', 'end_1_score', 'club', 'end_2_score', 'registered_at', 'end_3_score', 'attempt_status', 'end_4_score', 'total_score', 'hide_publicly', 'email']);
+  seedClub('brooklyn', ['registration_id', 'club', 'first_name', 'last_name', 'registered_at', 'attempt_status', 'end_1_score', 'end_2_score', 'end_3_score', 'end_4_score', 'total_score', 'hide_publicly', 'email']);
 
   const registration = { registration_id: 't1', first_name: 'Jack', last_name: 'Brooks', email: 'jack@example.com', club: 'brooklyn', registered_at: '2026-09-01', attempt_status: 'registered' };
   const first = fns.addRegistration(registration);
@@ -73,7 +73,7 @@ test('addRegistration writes each field (including email) to its resolved column
   assert.equal(club.getRange(first.club_row, 13).getValue(), 'jack@example.com');
 });
 
-test('addRegistration preserves an existing Master public_display but defaults new rows to unchecked', () => {
+test('addRegistration preserves an existing Master hide_publicly but defaults new rows to unchecked (visible)', () => {
   const { fns, seedMaster, seedClub } = loadRegistrationSync();
   const master = seedMaster();
   seedClub('brooklyn');
@@ -81,11 +81,11 @@ test('addRegistration preserves an existing Master public_display but defaults n
 
   const reg = { registration_id: 't2', first_name: 'Ann', last_name: 'Quinn', club: 'brooklyn', registered_at: '2026-09-01', attempt_status: 'completed' };
   const { master_row } = fns.addRegistration(reg);
-  assert.equal(master.getRange(master_row, cols.PUBLIC).getValue(), false);
+  assert.equal(master.getRange(master_row, cols.HIDE).getValue(), false);
 
-  master.getRange(master_row, cols.PUBLIC).setValue(true); // Lauren manually publishes it
+  master.getRange(master_row, cols.HIDE).setValue(true); // Lauren manually hides it
   fns.addRegistration(reg); // a replayed/duplicate webhook event for the same ticket
-  assert.equal(master.getRange(master_row, cols.PUBLIC).getValue(), true);
+  assert.equal(master.getRange(master_row, cols.HIDE).getValue(), true);
 });
 
 test('syncFromClubsNow_ isolates one club with broken headers, still syncs the healthy ones', () => {
@@ -109,7 +109,6 @@ test('syncFromClubsNow_ isolates one club with broken headers, still syncs the h
   fns.syncFromClubsNow_();
 
   assert.equal(master.getRange(2, cols.STATUS).getValue(), 'completed');
-  assert.equal(master.getRange(2, cols.PUBLIC).getValue(), true);
   assert.equal(master.getRange(3, cols.STATUS).getValue(), 'registered'); // chicago skipped, untouched
   assert.equal(systemErrors()!.getRange(2, 2).getValue(), 'club_sync:chicago');
 });
@@ -129,24 +128,26 @@ test('syncFromClubsNow_ surfaces a club row with no matching MASTER registration
   assert.match(String(systemErrors()!.getRange(2, 3).getValue()), /ghost-id/);
 });
 
-test('syncFromClubsNow_ auto-publishes only on the first transition to completed', () => {
+test('syncFromClubsNow_ never reads or writes hide_publicly, in either direction', () => {
   const { fns, seedMaster, seedClub, clubSheet } = loadRegistrationSync();
   ALL_CLUBS.forEach((id) => seedClub(id));
   const master = seedMaster();
   const cols = fns.resolveColumns_(master);
   master.getRange(2, cols.REG_ID).setValue('t-b');
   master.getRange(2, cols.STATUS).setValue('registered');
+  master.getRange(2, cols.HIDE).setValue(true); // Lauren already hid this player by hand
 
   const brooklyn = clubSheet('brooklyn');
   brooklyn.getRange(2, cols.REG_ID).setValue('t-b');
   brooklyn.getRange(2, cols.STATUS).setValue('completed');
 
   fns.syncFromClubsNow_();
-  assert.equal(master.getRange(2, cols.PUBLIC).getValue(), true);
-
-  master.getRange(2, cols.PUBLIC).setValue(false); // Lauren manually hides it
-  fns.syncFromClubsNow_(); // still completed -> completed: must not re-check it
-  assert.equal(master.getRange(2, cols.PUBLIC).getValue(), false);
+  // hide_publicly is opt-out, not opt-in: attempt_status still syncs from the
+  // club sheet as normal, but the sync never touches hide_publicly at all --
+  // visibility for a *non*-hidden player comes from attempt_status alone, on
+  // the public site's own query, not from anything this function writes.
+  assert.equal(master.getRange(2, cols.STATUS).getValue(), 'completed');
+  assert.equal(master.getRange(2, cols.HIDE).getValue(), true);
 });
 
 test('doPost rejects a bad token without writing System Errors, accepts a valid ticket', () => {
