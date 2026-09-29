@@ -129,17 +129,31 @@ cover.
   optionally emailed via `notifySystemFailure_` if `INGEST_ALERT_EMAIL` is
   set. The same sheet and helpers are also used by `syncFromClubsNow` (see
   below), distinguished by the `source` column (`tito_ingest` vs
-  `club_sync`/`club_sync:<club id>`). A failed registration must be noticed
-  and replayed by hand (e.g. re-running `addRegistration` with the logged
-  payload, or asking Tito to resend the event) — nothing retries it
-  automatically. Unauthorized requests (bad/missing token) are neither logged
-  nor emailed, to avoid filling the error sheet with scanner noise from the
-  public webhook URL.
+  `club_sync`/`club_sync:<club id>`/`club_sync:unmatched_ids`). A failed
+  registration must be noticed and replayed by hand (e.g. re-running
+  `addRegistration` with the logged payload, or asking Tito to resend the
+  event) — nothing retries it automatically. Unauthorized requests (bad/missing
+  token) are neither logged nor emailed, to avoid filling the error sheet with
+  scanner noise from the public webhook URL.
 - **A broken club doesn't take down the others.** If one club sheet's headers
   are broken, `syncFromClubsNow` logs it (`club_sync:<club id>`) and skips
   just that club, continuing the sync for the remaining four. If MASTER's own
   headers are broken, the whole sync aborts and logs once (`club_sync`) —
   there's nothing useful it can do without a working MASTER sheet.
+- **A lock timeout is now caught too.** `syncFromClubsNow`'s `waitLock` call
+  used to sit outside its own try/catch, so a lock-contention timeout would
+  escape uncaught with no `System Errors` row and no email — only Apps
+  Script's own opaque default trigger-failure notice. It's now inside the try,
+  so it's logged/emailed under `source: club_sync` like any other sync
+  failure.
+- **Unmatched club→MASTER registration IDs are now surfaced, not just
+  logged.** A club-sheet row whose `registration_id` has no matching MASTER
+  row (typo, a row MASTER never got, a manual club-sheet entry) used to only
+  show up in `Logger.log` output — visible solely in the Apps Script execution
+  transcript, which nobody checks routinely. It's real data drift, not a
+  transient error, so it now also goes to `System Errors`/email under
+  `source: club_sync:unmatched_ids` on every sync run where it's still
+  unresolved.
 
 ## Required Script Properties
 
