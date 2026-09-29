@@ -320,39 +320,62 @@ A few things worth knowing before using it:
   which stays pinned to Version 1 until someone deliberately creates a new
   deployment.
 
-### One-time local setup (do this before anything else)
+### One-time local setup (done — kept here for whoever logs in next)
 
-The npm scripts above assume `.clasp.json` already exists in this directory,
-which requires a one-time setup that only a human with edit access to the
-live Apps Script project can do — none of it can be scripted or done on
-someone's behalf:
+This was a one-time setup that only a human with edit access to the live
+Apps Script project could do — none of it could be scripted or done on
+someone's behalf. It's now done once (see "What the first clone found"
+below); these are the steps for anyone else (e.g. John) who wants their own
+local clasp login later:
 
 1. **Enable the Apps Script API** for your account at
    https://script.google.com/home/usersettings (a toggle, off by default) —
    clasp can't create/push projects until this is on.
 2. **`npm run clasp:login`** — opens a real browser for Google OAuth consent.
    Use a Google account that has edit access to the `ADMIN - Speed Shuffle
-   Score Tracker` sheet's Apps Script project.
+   Score Tracker` sheet's Apps Script project. If `clone`/`pull`/`push`
+   fail afterward with "insufficient authentication scopes," the consent
+   screen didn't get every scope checked — log out (`npx clasp logout`) and
+   log in again, making sure to approve all of them.
 3. **Find the live script ID.** Open the ADMIN sheet → Extensions → Apps
    Script; the URL is `https://script.google.com/.../projects/<SCRIPT_ID>/edit`.
    (`npx clasp list-scripts`, after step 2, also lists every Apps Script
    project the logged-in account can see, including this one, without
    needing to open the sheet.)
-4. **Clone it into this directory** to generate `.clasp.json`:
+4. **Clone it, from the repo root**, into this directory:
    ```sh
    npx clasp clone <SCRIPT_ID> --rootDir google-apps-script/registration-sync
    ```
-   Run this from the repo root. It writes `.clasp.json` (script ID + root
-   dir — not secret, safe to commit) and pulls down whatever's actually live,
-   including `appsscript.json`, which doesn't exist in this mirror yet.
-5. **Reconcile by hand, once.** Diff what `clone` just pulled against
-   `Admin.gs`/`Columns.gs`/`Config.gs`/`ErrorLog.gs`/`Ingest.gs`/`Repair.gs`/
-   `Sync.gs` in this directory. If the live project already matches this
-   mirror (expected, since PR #2 was manually copied in), the diff should be
-   empty or near-empty. If it isn't, that's real drift to understand before
-   trusting `clasp:push` to overwrite it.
-6. From then on, `npm run clasp:pull` / `npm run clasp:push` keep this
-   directory and the live project in sync.
+   This writes `.clasp.json` **at the repo root** (script ID + root dir —
+   not secret, already committed) — clasp resolves it from the current
+   directory, not from inside `rootDir`, so all `npm run clasp:*` commands
+   run from the repo root with no extra flags needed.
+
+### What the first clone found
+
+The reconciliation this was meant to catch was real, not a formality: the
+live project was still the **original single `Code.js`** (pre-dating the
+7-file split entirely), missing every fix from PR #2 —
+`resolveColumns_`/header-name column resolution, the `getScriptLock()`
+concurrency locking around `addRegistration`/`syncFromClubsNow`,
+`logSystemError_`/the `System Errors` sheet, and the lock-timeout catch and
+unmatched-ID surfacing that go with it. None of those fixes had reached
+production; they'd only ever existed in this repo. Function-by-function and
+club-workbook-ID diffing against `Code.js` turned up no live-only logic —
+the one function unique to it, `buildRegistrationRowValues_`, was the old
+pre-refactor version of what's now `buildRegistrationFields_` here, not
+something unique to preserve — so the local `Code.js` was deleted and
+`npm run clasp:push` sent this directory's fixed version to the live
+project's **HEAD**. That does not touch the pinned Web App version/webhook
+(see above) — production Tito ingest keeps running the old code until
+someone with Manager access deploys HEAD. Before asking for that deploy,
+run through this file's "End-to-end test" section against HEAD (Apps Script
+Web Apps' `/dev` test URL, or the `TEST_*` functions from the editor) to
+confirm the newly-pushed fixes actually behave as expected live, not just in
+the standalone Node harness mentioned in PR #2.
+
+From now on, `npm run clasp:pull` / `npm run clasp:push` (from the repo
+root) keep this directory and the live project's HEAD in sync.
 
 ### Editing/pushing vs. deploying need different accounts
 
@@ -391,8 +414,8 @@ yet (local-first, per the plan above):
 1. The `clasp login` from step 2 above produces `~/.clasprc.json`. Its
    contents get stored as a GitHub Actions secret (e.g. `CLASP_CREDENTIALS`).
 2. A workflow (triggered on push to this branch/path, or manually) recreates
-   `~/.clasprc.json` from the secret and runs `clasp push` from
-   `google-apps-script/registration-sync/`.
+   `~/.clasprc.json` from the secret and runs `clasp push` from the repo
+   root (where `.clasp.json` lives).
 3. Optionally, a separate manually-triggered (`workflow_dispatch`) job
    creates a new deployment to cut a new Web App version — kept manual on
    purpose, so the Tito webhook only changes when someone deliberately

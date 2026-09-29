@@ -16,10 +16,10 @@
     "dev:astro": "ASTRO_DEV_BACKGROUND=1 astro dev --port 4322",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "clasp:login": "clasp login",
-    "clasp:status": "clasp status --project google-apps-script/registration-sync",
-    "clasp:pull": "clasp pull --project google-apps-script/registration-sync",
-    "clasp:push": "clasp push --project google-apps-script/registration-sync",
-    "clasp:open": "clasp open-container --project google-apps-script/registration-sync"
+    "clasp:status": "clasp status",
+    "clasp:pull": "clasp pull",
+    "clasp:push": "clasp push",
+    "clasp:open": "clasp open-container"
   },
   "dependencies": {
     "astro": "7.3.2",
