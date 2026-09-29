@@ -328,6 +328,55 @@ function TEST_addStPeteRegistration() {
   );
 }
 
+/*
+ * Diagnostic for "System Errors showed up but no alert email arrived."
+ * Sends a real email directly via MailApp — not through
+ * notifySystemFailure_ — so success/failure surfaces immediately in a
+ * UI dialog instead of being swallowed into Logger.log, and so it's
+ * never blocked by the per-source cooldown in ErrorLog.gs. The
+ * recipient string's length is included so invisible leading/trailing
+ * whitespace in the INGEST_ALERT_EMAIL property shows up too.
+ */
+function TEST_alertEmailDelivery() {
+  var alertEmail =
+    PropertiesService
+      .getScriptProperties()
+      .getProperty('INGEST_ALERT_EMAIL');
+
+  if (!alertEmail) {
+    safeAlert_(
+      'INGEST_ALERT_EMAIL is not set as a script property.'
+    );
+    return;
+  }
+
+  var stamp =
+    new Date().toISOString();
+
+  try {
+    MailApp.sendEmail(
+      alertEmail,
+      'Speed Shuffle: test alert ' + stamp,
+      'Manual test of the System Errors alert email path, sent ' +
+      stamp +
+      ' to "' + alertEmail + '" (length ' + alertEmail.length + ').'
+    );
+
+    safeAlert_(
+      'Test email sent to "' + alertEmail + '" ' +
+      '(length ' + alertEmail.length + ') at ' + stamp + '.\n\n' +
+      'Check that inbox now — All Mail, Spam, Trash, and the ' +
+      'Promotions/Updates tabs, not just Inbox — for subject ' +
+      '"Speed Shuffle: test alert ' + stamp + '".'
+    );
+  } catch (err) {
+    safeAlert_(
+      'Test email FAILED to send to "' + alertEmail + '":\n\n' +
+      ((err && err.message) || err)
+    );
+  }
+}
+
 function FIX_uncheckAllClubHidePublicly() {
   var updated = [];
   var problems = [];
