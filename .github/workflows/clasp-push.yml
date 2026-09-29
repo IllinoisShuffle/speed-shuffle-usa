@@ -1,0 +1,32 @@
+name: Push registration-sync to Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "google-apps-script/registration-sync/**"
+      - ".clasp.json"
+  workflow_dispatch: {}
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - run: npm ci
+
+      - name: Restore clasp credentials
+        run: printf '%s' "$CLASP_CREDENTIALS" > "$HOME/.clasprc.json"
+        env:
+          CLASP_CREDENTIALS: ${{ secrets.CLASP_CREDENTIALS }}
+
+      # Only updates the live project's HEAD -- never the pinned Web App
+      # deployment/webhook. See google-apps-script/registration-sync/README.md
+      # ("Editing/pushing vs. deploying need different accounts") for why
+      # that split is safe to automate here but deploying is not.
+      - run: npx clasp push --force

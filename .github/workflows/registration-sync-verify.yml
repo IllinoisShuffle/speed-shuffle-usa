@@ -1,0 +1,40 @@
+name: Verify registration-sync against live sheets
+
+# Manual only, on purpose: this calls the live Apps Script project's
+# verifySystem() (headers + trigger count check -- "Diagnostic only. Does
+# not change data.", see Admin.gs) via the Apps Script API. Unlike
+# clasp-push.yml, this has never been run before from CI -- clasp run
+# needs the Apps Script API execution scope, which may hit the same Shared
+# Drive Manager-role gate that blocks New Deployment (see
+# "Editing/pushing vs. deploying need different accounts" in
+# google-apps-script/registration-sync/README.md). Do a manual dry run
+# with this workflow before relying on it.
+#
+# The mutating TEST_* functions (TEST_titoBrooklynTicket, etc.) are
+# deliberately NOT wired up here: they write test-prefixed rows into the
+# real MASTER/club sheets, which then persist and count toward
+# registered/completed totals until someone manually cleans them up (see
+# the README's "End-to-end test" section, step 7). That's an acceptable
+# cost for a human running it deliberately in the Apps Script editor, but
+# not for a CI button anyone can click.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - run: npm ci
+
+      - name: Restore clasp credentials
+        run: printf '%s' "$CLASP_CREDENTIALS" > "$HOME/.clasprc.json"
+        env:
+          CLASP_CREDENTIALS: ${{ secrets.CLASP_CREDENTIALS }}
+
+      - run: npx clasp run-function verifySystem
