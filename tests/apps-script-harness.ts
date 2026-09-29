@@ -101,6 +101,7 @@ type RegistrationSyncApi = {
   syncFromClubsNow(): void;
   installSyncTrigger(): void;
   pauseSyncTrigger(): void;
+  verifySystem(): void;
   doPost(e: { parameter?: Record<string, string>; postData?: { contents: string } }): { getContent(): string };
 };
 
@@ -146,6 +147,7 @@ export function loadRegistrationSync() {
     },
     MailApp: { sendEmail: (to: string, subject: string, body: string) => { mail.push({ to, subject, body }); } },
     Logger: { log: (msg: unknown) => { logs.push(String(msg)); } },
+    console: { log: (msg: unknown) => { logs.push(String(msg)); } },
     ScriptApp: {
       getProjectTriggers: () => [...triggers],
       newTrigger: (handlerFunction: string) => ({

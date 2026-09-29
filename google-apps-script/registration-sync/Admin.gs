@@ -191,6 +191,17 @@ function TEST_titoBrooklynTicket() {
  * Diagnostic only.
  * Does not change data.
  */
+/*
+ * Run this from the Apps Script code editor's Run button (select
+ * verifySystem, click Run), not the Speed Shuffle menu -- it isn't on
+ * that menu. Results go to console.log, visible both in this editor's
+ * own execution transcript and in Cloud Logging (Stackdriver) for
+ * later, rather than a SpreadsheetApp.getUi() alert: that alert used to
+ * block until dismissed, and since it renders on the *Sheet's* tab --
+ * not this editor's -- while running from here, it was easy to miss
+ * entirely and let Apps Script kill the whole execution for exceeding
+ * its 6-minute time budget while it sat waiting for a click nobody saw.
+ */
 function verifySystem() {
   var problems = [];
   var ok = [];
@@ -211,6 +222,12 @@ function verifySystem() {
   }
 
   CLUBS.forEach(function(club) {
+    console.log(
+      'verifySystem: checking ' +
+      club.label +
+      '...'
+    );
+
     try {
       var players =
         ensureClubPlayersSheet_(
@@ -252,16 +269,20 @@ function verifySystem() {
     syncTriggers.length === 1
   ) {
     ok.push(
-      'Exactly one sync trigger installed'
+      'Exactly one sync trigger owned by your own account ' +
+      '(ScriptApp.getProjectTriggers() cannot see triggers ' +
+      'installed by a different account -- see Outstanding risks ' +
+      'in the README)'
     );
   } else {
     problems.push(
-      'Expected exactly one syncFromClubsNow trigger; found ' +
+      'Expected exactly one syncFromClubsNow trigger owned by your ' +
+      'own account; found ' +
       syncTriggers.length
     );
   }
 
-  safeAlert_(
+  console.log(
     'System verification\n\n' +
     'OK:\n• ' +
     (
