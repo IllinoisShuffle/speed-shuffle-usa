@@ -331,11 +331,14 @@ function TEST_addStPeteRegistration() {
 /*
  * Diagnostic for "System Errors showed up but no alert email arrived."
  * Sends a real email directly via MailApp, not through
- * notifySystemFailure_, so success/failure surfaces immediately in a
- * UI dialog instead of being swallowed into Logger.log, and so it's
- * never blocked by the per-source cooldown in ErrorLog.gs. The
- * recipient string's length is included so invisible leading/trailing
- * whitespace in the INGEST_ALERT_EMAIL property shows up too.
+ * notifySystemFailure_, so success/failure is never blocked by the
+ * per-source cooldown in ErrorLog.gs. Editor-only helper (not on the
+ * Sheet menu) so it reports via console.log, not safeAlert_ - a
+ * blocking Sheet-UI modal here would just pop up in whatever tab has
+ * the Sheet open, invisible from the editor and easy to mistake for a
+ * hang. The recipient string's length is included so invisible
+ * leading/trailing whitespace in the INGEST_ALERT_EMAIL property
+ * shows up too.
  */
 function TEST_alertEmailDelivery() {
   var alertEmail =
@@ -344,7 +347,7 @@ function TEST_alertEmailDelivery() {
       .getProperty('INGEST_ALERT_EMAIL');
 
   if (!alertEmail) {
-    safeAlert_(
+    console.log(
       'INGEST_ALERT_EMAIL is not set as a script property.'
     );
     return;
@@ -365,14 +368,14 @@ function TEST_alertEmailDelivery() {
       stamp + ' to ' + recipientNote + '.'
     );
 
-    safeAlert_(
+    console.log(
       'Test email sent. ' + recipientNote + ' at ' + stamp + '. ' +
       'Check that inbox now: All Mail, Spam, Trash, and the ' +
       'Promotions/Updates tabs, not just Inbox, for subject ' +
       'Speed Shuffle test alert ' + stamp + '.'
     );
   } catch (err) {
-    safeAlert_(
+    console.log(
       'Test email FAILED to send. ' + recipientNote + '. Error: ' +
       ((err && err.message) || err)
     );
