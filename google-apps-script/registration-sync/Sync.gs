@@ -419,3 +419,48 @@ function installSyncTrigger() {
     'Automatic club → Master sync installed for every 10 minutes.'
   );
 }
+
+
+/*
+ * Deletes any installed syncFromClubsNow trigger without installing a
+ * replacement -- e.g. to stop System Errors from filling up with the
+ * same failure every run while a header/schema mismatch is being
+ * fixed by hand. Does not touch the Tito webhook (a separate,
+ * deployment-pinned concern) or MASTER/club sheet data.
+ *
+ * Re-run "Install Automatic Sync (One-Time Setup)" from this same
+ * menu to resume -- it already deletes-then-recreates, so it doubles
+ * as "resume."
+ */
+function pauseSyncTrigger() {
+  var handlerName =
+    'syncFromClubsNow';
+
+  var removed = 0;
+
+  ScriptApp
+    .getProjectTriggers()
+    .forEach(function(trigger) {
+      var handler =
+        trigger.getHandlerFunction();
+
+      if (
+        handler === handlerName ||
+        handler === 'FIX_syncFromClubsNow' ||
+        handler === 'syncFromClubs'
+      ) {
+        ScriptApp.deleteTrigger(
+          trigger
+        );
+
+        removed++;
+      }
+    });
+
+  safeAlert_(
+    removed
+      ? 'Automatic club → Master sync paused. ' +
+        'Re-run "Install Automatic Sync" to resume.'
+      : 'No automatic sync trigger was installed -- nothing to pause.'
+  );
+}
