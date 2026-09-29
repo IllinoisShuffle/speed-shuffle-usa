@@ -4,14 +4,14 @@ import { parseStandings, type Cell } from '../netlify/lib/standings.ts';
 import { spreadsheetId } from '../netlify/lib/sheets.ts';
 import { createHandler } from '../netlify/functions/leaderboard-data.ts';
 
-const headers = ['registration_id', 'first_name', 'last_initial', 'club', 'attempt_status', 'total_score', 'public_display', 'email'];
+const headers = ['registration_id', 'first_name', 'last_name', 'club', 'attempt_status', 'total_score', 'public_display', 'email'];
 const fixture = (): Cell[][] => [headers,
-  ['a', 'Alex', 'Q', 'chicago', 'completed', 80, true, 'private@example.invalid'],
-  ['b', 'Casey', 'R', 'brooklyn', 'completed', 74, true],
-  ['c', 'Drew', 'S', 'st-pete', 'completed', 74, true],
-  ['d', 'Hidden', 'T', 'tampa', 'completed', 90, false],
-  ['e', 'Pending', 'U', 'chicago', 'registered', '', true],
-  ['f', 'Cancelled', 'V', 'chicago', 'cancelled', '', false]];
+  ['a', 'Alex', 'Quinn', 'chicago', 'completed', 80, true, 'private@example.invalid'],
+  ['b', 'Casey', 'Rivera', 'brooklyn', 'completed', 74, true],
+  ['c', 'Drew', 'Sato', 'st-pete', 'completed', 74, true],
+  ['d', 'Hidden', 'Torres', 'tampa', 'completed', 90, false],
+  ['e', 'Pending', 'Underwood', 'chicago', 'registered', '', true],
+  ['f', 'Cancelled', 'Vance', 'chicago', 'cancelled', '', false]];
 
 test('sorts and ranks all completed players, suppresses opt-outs and private fields', () => {
   const result = parseStandings(fixture(), false);

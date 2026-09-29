@@ -3,7 +3,7 @@
  * item. Lays down data validation, the total_score formula, and range
  * protections across MASTER and all five club sheets. Unlike the
  * runtime read/write paths in Sync.gs/Ingest.gs, this tool requires
- * the canonical A:L column order exactly (assertCanonicalColumnOrder_
+ * the canonical A:M column order exactly (assertCanonicalColumnOrder_
  * in Columns.gs) and refuses to touch a sheet that's already drifted,
  * rather than guessing how to fix it.
  */
@@ -44,7 +44,8 @@ function prepareAllSheets() {
       'J2:J1000 = formula\n' +
       'K2:K1000 = checkbox only\n' +
       'L = registration_id\n' +
-      'M:U cleared'
+      'M = email\n' +
+      'N:U cleared'
     );
   } catch (err) {
     safeAlert_(
@@ -149,23 +150,23 @@ function preparePlayerSheet_(
   lRange.clearDataValidations();
 
   /*
-   * M:U unused.
+   * N:U unused. (M is email — left alone here, protected below.)
    */
-  var mToU =
+  var nToU =
     sheet.getRange(
       1,
-      13,
+      14,
       sheet.getMaxRows(),
-      9
+      8
     );
 
   try {
-    mToU.removeCheckboxes();
+    nToU.removeCheckboxes();
   } catch (err) {}
 
-  mToU.clearDataValidations();
-  mToU.clearContent();
-  mToU.clearFormat();
+  nToU.clearDataValidations();
+  nToU.clearContent();
+  nToU.clearFormat();
 
   /*
    * attempt_status = dropdown.
@@ -296,7 +297,7 @@ function applyProtections_(
       1,
       HEADER_ORDER.length
     ),
-    'Header A:L'
+    'Header A:M'
   );
 
   protectRange_(
@@ -327,6 +328,20 @@ function applyProtections_(
       1
     ),
     'registration_id L'
+  );
+
+  /*
+   * email is Tito-sourced identity data, same as first_name/last_name/
+   * club — protected on both Master and club sheets, not hand-edited.
+   */
+  protectRange_(
+    sheet.getRange(
+      2,
+      cols.EMAIL,
+      DATA_ROWS,
+      1
+    ),
+    'email M'
   );
 
   /*

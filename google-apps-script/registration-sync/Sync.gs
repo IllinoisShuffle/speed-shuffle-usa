@@ -1,5 +1,5 @@
 /**
- * Club -> Master sync, plus the 1-minute time trigger that runs it
+ * Club -> Master sync, plus the 10-minute time trigger that runs it
  * automatically. Copies attempt_status + the four end scores from
  * each club sheet to the matching MASTER row, matched by
  * registration_id. Never creates rows and never copies
@@ -329,10 +329,10 @@ function syncFromClubsNow_() {
 
 
 /* =========================================================
-   AUTOMATIC 1-MINUTE TRIGGER
+   AUTOMATIC 10-MINUTE TRIGGER
    ========================================================= */
 
-function installOneMinuteSyncTrigger() {
+function installSyncTrigger() {
   var handlerName =
     'syncFromClubsNow';
 
@@ -358,10 +358,10 @@ function installOneMinuteSyncTrigger() {
       handlerName
     )
     .timeBased()
-    .everyMinutes(1)
+    .everyMinutes(10)
     .create();
 
   safeAlert_(
-    'Automatic club → Master sync installed for every 1 minute.'
+    'Automatic club → Master sync installed for every 10 minutes.'
   );
 }

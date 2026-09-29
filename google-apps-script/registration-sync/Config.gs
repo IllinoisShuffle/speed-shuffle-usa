@@ -19,7 +19,7 @@
  * CANONICAL COLUMN ORDER (what prepareAllSheets() lays down
  * on a fresh or reset sheet):
  * A first_name
- * B last_initial
+ * B last_name               ← full name, protected (see note below)
  * C club
  * D registered_at
  * E attempt_status          ← club editable
@@ -32,18 +32,29 @@
  *                              default FALSE
  *                              auto-TRUE on first transition to completed
  * L registration_id        ← stable identity key, protected
+ * M email                   ← protected
  *
  * Club admins edit only E:I.
  *
+ * This sheet is the operational record for running the event — it
+ * intentionally holds real identity data (full last name, email) that
+ * the club and tournament staff need to check people in, resolve
+ * disputes, and make contact. That is a separate concern from the
+ * public results website, which only ever wants a first name + last
+ * initial and must never see email. Keeping the full data here and
+ * having the *website's own query* derive/redact what it publicly
+ * shows (see netlify/lib/standings.ts) means this schema serves running
+ * the competition, not the other way around.
+ *
  * COLUMN RESOLUTION: every read/write in the Tito ingest and
- * club↔master sync paths looks up each of the 12 header names above by
+ * club↔master sync paths looks up each of the 13 header names above by
  * text, via resolveColumns_(), rather than assuming the letters above.
  * A sheet whose columns have been reordered, or that has extra columns
- * added elsewhere, still works. A sheet that is missing one of the 12
+ * added elsewhere, still works. A sheet that is missing one of the 13
  * names (typo, deletion, accidental overwrite) fails loudly — the
  * write is refused and logged to the "System Errors" sheet instead of
  * silently landing in the wrong column. prepareAllSheets() (menu item
- * "Repair All Sheets") is stricter: it requires the canonical A:L
+ * "Repair All Sheets") is stricter: it requires the canonical A:M
  * order exactly, and stops with an alert rather than reformatting a
  * sheet that's out of order.
  *
@@ -101,7 +112,7 @@ var STATUS_VALUES = [
  */
 var HEADER_ORDER = [
   'first_name',
-  'last_initial',
+  'last_name',
   'club',
   'registered_at',
   'attempt_status',
@@ -111,12 +122,13 @@ var HEADER_ORDER = [
   'end_4_score',
   'total_score',
   'public_display',
-  'registration_id'
+  'registration_id',
+  'email'
 ];
 
 var HEADER_KEYS = [
   'FIRST',
-  'LAST',
+  'LAST_NAME',
   'CLUB',
   'REGISTERED',
   'STATUS',
@@ -126,7 +138,8 @@ var HEADER_KEYS = [
   'E4',
   'TOTAL',
   'PUBLIC',
-  'REG_ID'
+  'REG_ID',
+  'EMAIL'
 ];
 
 var CLUBS = [

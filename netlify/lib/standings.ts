@@ -3,7 +3,7 @@ import type { ClubId, ClubStats, PlayerStanding } from '../../src/lib/types.ts';
 
 export class SheetError extends Error {}
 export type Cell = string | number | boolean;
-const required = ['registration_id', 'first_name', 'last_initial', 'club', 'attempt_status', 'total_score', 'public_display'];
+const required = ['registration_id', 'first_name', 'last_name', 'club', 'attempt_status', 'total_score', 'public_display'];
 const clubIds = new Set<string>(clubs.map(club => club.id));
 
 export function parseStandings(values: Cell[][], showScores: boolean) {
@@ -29,7 +29,9 @@ export function parseStandings(values: Cell[][], showScores: boolean) {
     club.registered++;
     if (status !== 'completed') continue;
     const firstName = cell('first_name');
-    const lastInitial = cell('last_initial').replace(/\.$/, '');
+    // The sheet holds the real last name for running the event; only the
+    // initial is ever exposed to the public site, derived right here.
+    const lastInitial = cell('last_name').charAt(0);
     const score = Number(cell('total_score'));
     const display = cell('public_display').toLowerCase();
     if (!firstName || !/^\p{L}$/u.test(lastInitial) || !cell('total_score') || !Number.isFinite(score) || !Number.isInteger(score) || !['', 'true', 'false'].includes(display)) throw invalid();
