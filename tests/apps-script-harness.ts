@@ -81,7 +81,7 @@ class FakeSpreadsheet {
 }
 
 type Club = { id: string; label: string; workbookId: string };
-type Cols = { FIRST: number; LAST: number; CLUB: number; REGISTERED: number; STATUS: number; E1: number; E2: number; E3: number; E4: number; TOTAL: number; PUBLIC: number; REG_ID: number };
+type Cols = { FIRST: number; LAST_NAME: number; CLUB: number; REGISTERED: number; STATUS: number; E1: number; E2: number; E3: number; E4: number; TOTAL: number; PUBLIC: number; REG_ID: number; EMAIL: number };
 type Registration = Record<string, string | number | undefined>;
 
 // The shape of the live .gs source once loaded into the vm sandbox --

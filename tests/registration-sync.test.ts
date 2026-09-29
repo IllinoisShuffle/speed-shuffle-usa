@@ -6,10 +6,10 @@ const ALL_CLUBS = ['brooklyn', 'chicago', 'st-pete', 'tampa', 'beachside'];
 
 test('resolveColumns_ finds every header by name regardless of order, ignores extra columns', () => {
   const { fns, seedMaster } = loadRegistrationSync();
-  const sheet = seedMaster(['registration_id', 'team_name', 'public_display', 'total_score', 'end_4_score', 'end_3_score', 'end_2_score', 'end_1_score', 'attempt_status', 'registered_at', 'club', 'last_initial', 'first_name']);
+  const sheet = seedMaster(['registration_id', 'team_name', 'public_display', 'total_score', 'end_4_score', 'end_3_score', 'end_2_score', 'end_1_score', 'attempt_status', 'registered_at', 'club', 'last_name', 'first_name', 'email']);
   const cols = fns.resolveColumns_(sheet);
-  assert.deepEqual({ REG_ID: cols.REG_ID, PUBLIC: cols.PUBLIC, E4: cols.E4, E1: cols.E1, FIRST: cols.FIRST },
-    { REG_ID: 1, PUBLIC: 3, E4: 5, E1: 8, FIRST: 13 });
+  assert.deepEqual({ REG_ID: cols.REG_ID, PUBLIC: cols.PUBLIC, E4: cols.E4, E1: cols.E1, FIRST: cols.FIRST, EMAIL: cols.EMAIL },
+    { REG_ID: 1, PUBLIC: 3, E4: 5, E1: 8, FIRST: 13, EMAIL: 14 });
 });
 
 test('resolveColumns_ fails loudly on a missing or duplicated required header', () => {
@@ -26,18 +26,20 @@ test('assertCanonicalColumnOrder_ accepts the canonical order and rejects a reor
   assert.doesNotThrow(() => fns.assertCanonicalColumnOrder_(seedMaster()));
   const swapped = [...fns.HEADER_ORDER];
   [swapped[8], swapped[9]] = [swapped[9], swapped[8]];
-  assert.throws(() => fns.assertCanonicalColumnOrder_(seedMaster(swapped)), /not in the canonical A:L order/);
+  assert.throws(() => fns.assertCanonicalColumnOrder_(seedMaster(swapped)), /not in the canonical .+ order/);
 });
 
-test('mapTitoPayloadToRegistration_ maps a ticket, resolves club aliases, and flags voided tickets cancelled', () => {
+test('mapTitoPayloadToRegistration_ maps a ticket, resolves club aliases, captures email, and flags voided tickets cancelled', () => {
   const { fns } = loadRegistrationSync();
-  const ticket = fns.mapTitoPayloadToRegistration_({ _type: 'ticket', slug: 'tk-1', first_name: 'Nick', last_name: 'Haynes', release_slug: 'chicago', updated_at: '2026-09-01T00:00:00Z' }, '');
-  assert.deepEqual({ registration_id: ticket.registration_id, club: ticket.club, last_initial: ticket.last_initial, attempt_status: ticket.attempt_status },
-    { registration_id: 'tk-1', club: 'chicago', last_initial: 'H', attempt_status: 'registered' });
+  const ticket = fns.mapTitoPayloadToRegistration_({ _type: 'ticket', slug: 'tk-1', first_name: 'Nick', last_name: 'Haynes', email: 'nick@example.com', release_slug: 'chicago', updated_at: '2026-09-01T00:00:00Z' }, '');
+  assert.deepEqual({ registration_id: ticket.registration_id, club: ticket.club, last_name: ticket.last_name, email: ticket.email, attempt_status: ticket.attempt_status },
+    { registration_id: 'tk-1', club: 'chicago', last_name: 'Haynes', email: 'nick@example.com', attempt_status: 'registered' });
 
-  const aliased = fns.mapTitoPayloadToRegistration_({ _type: 'ticket', slug: 'tk-2', name: 'Sunny Rae', release_title: 'St Pete Club' }, '');
+  // splitName_ joins every word after the first as the full last name,
+  // not just its initial -- covers a multi-word last name too.
+  const aliased = fns.mapTitoPayloadToRegistration_({ _type: 'ticket', slug: 'tk-2', name: 'Sunny Rae Jones', release_title: 'St Pete Club' }, '');
   assert.equal(aliased.club, 'st-pete');
-  assert.deepEqual({ first_name: aliased.first_name, last_initial: aliased.last_initial }, { first_name: 'Sunny', last_initial: 'R' });
+  assert.deepEqual({ first_name: aliased.first_name, last_name: aliased.last_name, email: aliased.email }, { first_name: 'Sunny', last_name: 'Rae Jones', email: '' });
 
   const voided = fns.mapTitoPayloadToRegistration_({ _type: 'ticket', slug: 'tk-3', release_slug: 'tampa', state_name: 'voided' }, '');
   assert.equal(voided.attempt_status, 'cancelled');
@@ -46,12 +48,14 @@ test('mapTitoPayloadToRegistration_ maps a ticket, resolves club aliases, and fl
   assert.throws(() => fns.mapTitoPayloadToRegistration_({ _type: 'ticket', release_slug: 'chicago' }, ''), /missing slug/);
 });
 
-test('addRegistration writes each field to its resolved column on both sheets and is idempotent', () => {
+test('addRegistration writes each field (including email) to its resolved column on both sheets and is idempotent', () => {
   const { fns, seedMaster, seedClub, clubSheet } = loadRegistrationSync();
-  seedMaster(['first_name', 'registration_id', 'last_initial', 'end_1_score', 'club', 'end_2_score', 'registered_at', 'end_3_score', 'attempt_status', 'end_4_score', 'total_score', 'public_display']);
-  seedClub('brooklyn', ['registration_id', 'club', 'first_name', 'last_initial', 'registered_at', 'attempt_status', 'end_1_score', 'end_2_score', 'end_3_score', 'end_4_score', 'total_score', 'public_display']);
+  // 'email' appended after the original 12 so the E1..E4 letters used below
+  // (D, F, H, J) are unaffected by its addition to the schema.
+  seedMaster(['first_name', 'registration_id', 'last_name', 'end_1_score', 'club', 'end_2_score', 'registered_at', 'end_3_score', 'attempt_status', 'end_4_score', 'total_score', 'public_display', 'email']);
+  seedClub('brooklyn', ['registration_id', 'club', 'first_name', 'last_name', 'registered_at', 'attempt_status', 'end_1_score', 'end_2_score', 'end_3_score', 'end_4_score', 'total_score', 'public_display', 'email']);
 
-  const registration = { registration_id: 't1', first_name: 'Jack', last_initial: 'B', club: 'brooklyn', registered_at: '2026-09-01', attempt_status: 'registered' };
+  const registration = { registration_id: 't1', first_name: 'Jack', last_name: 'Brooks', email: 'jack@example.com', club: 'brooklyn', registered_at: '2026-09-01', attempt_status: 'registered' };
   const first = fns.addRegistration(registration);
   const second = fns.addRegistration(registration);
   assert.deepEqual(first, second);
@@ -59,12 +63,14 @@ test('addRegistration writes each field to its resolved column on both sheets an
   const master = fns.ensureMasterSheet_();
   assert.equal(master.getRange(first.master_row, 1).getValue(), 'Jack');
   assert.equal(master.getRange(first.master_row, 2).getValue(), 't1');
+  assert.equal(master.getRange(first.master_row, 13).getValue(), 'jack@example.com');
   // end_1..end_4 landed at columns 4, 6, 8, 10 (D, F, H, J) on this deliberately
   // non-contiguous master layout -- the formula must reference exactly those cells.
   assert.equal(master.getRange(first.master_row, 11).getValue(), '=IF(COUNTA(D2,F2,H2,J2)=0,"",SUM(D2,F2,H2,J2))');
 
   const club = clubSheet('brooklyn');
   assert.equal(club.getRange(first.club_row, 3).getValue(), 'Jack');
+  assert.equal(club.getRange(first.club_row, 13).getValue(), 'jack@example.com');
 });
 
 test('addRegistration preserves an existing Master public_display but defaults new rows to unchecked', () => {
@@ -73,7 +79,7 @@ test('addRegistration preserves an existing Master public_display but defaults n
   seedClub('brooklyn');
   const cols = fns.resolveColumns_(master);
 
-  const reg = { registration_id: 't2', first_name: 'Ann', last_initial: 'Q', club: 'brooklyn', registered_at: '2026-09-01', attempt_status: 'completed' };
+  const reg = { registration_id: 't2', first_name: 'Ann', last_name: 'Quinn', club: 'brooklyn', registered_at: '2026-09-01', attempt_status: 'completed' };
   const { master_row } = fns.addRegistration(reg);
   assert.equal(master.getRange(master_row, cols.PUBLIC).getValue(), false);
 
@@ -174,4 +180,20 @@ test('doPost logs an authenticated failure to System Errors and emails if INGEST
   assert.equal(systemErrors()!.getRange(2, 2).getValue(), 'tito_ingest');
   assert.equal(mail.length, 1);
   assert.equal(mail[0].to, 'ops@example.invalid');
+});
+
+test('repeated failures of the same source log every time but email only once per cooldown window', () => {
+  const { fns, properties, seedMaster, seedClub, systemErrors, mail } = loadRegistrationSync();
+  seedMaster();
+  seedClub('chicago');
+  properties.set('REGISTRATION_INGEST_TOKEN', 'secret');
+  properties.set('INGEST_ALERT_EMAIL', 'ops@example.invalid');
+
+  const payload = { _type: 'ticket', slug: 'tito-3', release_slug: 'not-a-real-club' };
+  const req = { parameter: { token: 'secret' }, postData: { contents: JSON.stringify(payload) } };
+  fns.doPost(req);
+  fns.doPost(req); // same source ('tito_ingest'), well within the 1-hour cooldown
+
+  assert.equal(systemErrors()!.getLastRow(), 3); // header + two logged failures
+  assert.equal(mail.length, 1); // but only the first sent an email
 });
