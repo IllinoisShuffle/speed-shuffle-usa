@@ -13,19 +13,28 @@ const fixture = (): Cell[][] => [headers,
   ['e', 'Pending', 'Underwood', 'chicago', 'registered', '', false],
   ['f', 'Cancelled', 'Vance', 'chicago', 'cancelled', '', true]];
 
-test('sorts and ranks all completed players, suppresses opt-outs and private fields', () => {
+test('sorts and ranks all completed players, shows a placeholder for opt-outs, suppresses private fields', () => {
   const result = parseStandings(fixture(), false);
-  assert.deepEqual(result.players.map(player => player.rank), [2, 3, 3]);
+  assert.deepEqual(result.players.map(player => player.rank), [1, 2, 3, 3]);
   assert.equal(result.stats[0].registered, 2);
   assert.equal(result.stats[0].completed, 1);
-  assert.equal(result.players.length, 3);
-  for (const player of result.players) assert.deepEqual(Object.keys(player).sort(), ['clubId', 'completed', 'displayName', 'id', 'rank']);
+  assert.equal(result.players.length, 4);
+  const hiddenPlayer = result.players.find(player => player.hidden);
+  assert.equal(hiddenPlayer?.rank, 1);
+  assert.equal(hiddenPlayer?.displayName, 'Name withheld');
+  for (const player of result.players) {
+    const expectedKeys = player.hidden
+      ? ['clubId', 'completed', 'displayName', 'hidden', 'id', 'rank']
+      : ['clubId', 'completed', 'displayName', 'id', 'rank'];
+    assert.deepEqual(Object.keys(player).sort(), expectedKeys);
+  }
   assert.ok(!JSON.stringify(result).includes('private@example.invalid'));
   assert.ok(!JSON.stringify(result).includes('Hidden'));
+  assert.ok(!JSON.stringify(result).includes('Torres'));
 });
-test('reveal mode includes scores; zero and negative scores are valid', () => {
+test('reveal mode includes scores for everyone, including a hidden winner; zero and negative scores are valid', () => {
   const rows = fixture(); rows[1][5] = 0; rows[2][5] = -10;
-  assert.deepEqual(parseStandings(rows, true).players.map(player => player.score), [74, 0, -10]);
+  assert.deepEqual(parseStandings(rows, true).players.map(player => player.score), [90, 74, 0, -10]);
 });
 test('headers only is a valid empty sheet, absent headers is not', () => {
   assert.deepEqual(parseStandings([headers], false).players, []);
