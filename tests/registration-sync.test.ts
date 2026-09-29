@@ -239,3 +239,27 @@ test('pauseSyncTrigger stops syncFromClubsNow via a Script Property, even with n
   fns.installSyncTrigger(); // resume
   assert.equal(properties.get('syncPaused'), undefined);
 });
+
+test('verifySystem logs via console.log instead of a blocking UI alert, and never throws', () => {
+  const { fns, seedMaster, seedClub, logs } = loadRegistrationSync();
+  seedMaster();
+  ALL_CLUBS.forEach((id) => seedClub(id));
+  fns.installSyncTrigger();
+
+  assert.doesNotThrow(() => fns.verifySystem()); // would throw "no UI in tests" if it still called getUi()
+  const summary = logs.join('\n');
+  assert.match(summary, /MASTER headers OK/);
+  assert.match(summary, /Beachside Social headers OK/);
+  assert.match(summary, /Problems:\n• \(none\)/);
+});
+
+test('verifySystem reports a broken club sheet as a problem, not a thrown error', () => {
+  const { fns, seedMaster, seedClub, logs } = loadRegistrationSync();
+  seedMaster();
+  ALL_CLUBS.filter((id) => id !== 'chicago').forEach((id) => seedClub(id));
+  seedClub('chicago', fns.HEADER_ORDER.filter((h) => h !== 'email')); // seeded once, missing email from the start
+
+  fns.verifySystem();
+  const summary = logs.join('\n');
+  assert.match(summary, /Chicago: .*missing required header.*email/i);
+});

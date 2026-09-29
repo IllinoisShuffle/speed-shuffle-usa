@@ -260,6 +260,18 @@ close the worst correctness and silent-failure gaps, but the underlying
 architecture still has real limits worth knowing about rather than
 discovering during the tournament:
 
+- **Cloud Logging (Stackdriver) only ever sees uncaught exceptions, not the
+  project's own `Logger.log` calls.** `appsscript.json`'s
+  `"exceptionLogging": "STACKDRIVER"` forwards crashes there, but everything
+  this codebase deliberately logs (`Logger.log` in `syncFromClubsNow_`,
+  `console.log` in `verifySystem`) only reaches the Apps Script editor's own
+  per-execution transcript, not Cloud Logging. That's usually fine — the
+  `System Errors` sheet is this project's real, intentional durable log for
+  application-level failures — but it means a platform-level failure that
+  never reaches the script's own code (a hard execution-timeout kill, for
+  instance) can *only* show up in Cloud Logging, nowhere else. If richer
+  Cloud Logging ever becomes worth having (e.g. breadcrumbs before a crash),
+  it needs `console.log`/`console.error` specifically, not `Logger.log`.
 - **No true webhook retry.** As above: Apps Script Web Apps can't return a
   non-200 status, so Tito can never know an ingest failed and cannot retry it
   for us. The `System Errors` sheet and `INGEST_ALERT_EMAIL` turn "silently
@@ -506,11 +518,11 @@ Two workflows exist today:
   **This has not been dry-run yet.** `clasp run` needs the Apps Script API
   execution scope, which may hit the same Shared Drive Manager-role gate
   that blocks New Deployment — confirm it actually works (ideally with
-  Jim's credentials) before relying on it. It also won't surface
-  `verifySystem`'s OK/Problems breakdown in the Actions log, since that goes
-  through `safeAlert_`'s `Logger.log` fallback rather than a return value —
-  today this only tells you whether the call succeeded or threw, not what
-  it found.
+  Jim's credentials) before relying on it. `verifySystem` logs its
+  OK/Problems breakdown via `console.log` (see "What it does" above) rather
+  than a return value or a blocking alert, but it's unconfirmed whether
+  `clasp run-function`'s Actions log output actually surfaces that inline —
+  if not, Cloud Logging (Stackdriver) is the fallback place to look.
 
 Deliberately **not** automated: the mutating `TEST_*` functions and cutting
 a new deployment. Both write to (or would affect) the live production
