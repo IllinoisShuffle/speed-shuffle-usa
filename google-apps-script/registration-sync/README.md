@@ -3,10 +3,30 @@
 This is a mirror of the container-bound Apps Script project attached to the
 **`ADMIN - Speed Shuffle Score Tracker`** Google Sheet (the master sheet, in the
 `Score Tracking` Drive folder). It lives in Google Drive/Apps Script, not in Netlify
-— it is not deployed by this repo's build or CI. `Code.gs` here is kept as the
-source of truth for review and history; **edits must still be made in the Apps
-Script editor** (Sheet → Extensions → Apps Script) and copied back here, since
-Apps Script has no native git integration in this setup.
+— it is not deployed by this repo's build or CI. The `.gs` files here are kept as
+the source of truth for review and history; **edits must still be made in the
+Apps Script editor** (Sheet → Extensions → Apps Script) and copied back here,
+since Apps Script has no native git integration in this setup (see "Should we
+use clasp?" below for a way to close that gap).
+
+The project is split into several files, purely for readability — Apps Script
+merges every file in a project into one shared global scope at runtime, so
+this has no effect on behavior, locking, or Script Properties:
+
+| File | Responsibility |
+| --- | --- |
+| `Config.gs` | Every top-level constant: sheet/menu names, the canonical header list, the five club workbook IDs. |
+| `Columns.gs` | Header-name column resolution (`resolveColumns_`) — shared by every other file. |
+| `Repair.gs` | Sheet formatting/protection setup — the "Repair All Sheets" menu item. |
+| `Sync.gs` | Club → Master sync and its 1-minute time trigger. |
+| `Ingest.gs` | The Tito webhook (`doPost`) and registration upsert. |
+| `ErrorLog.gs` | The `System Errors` sheet and optional email alert, shared by `Sync.gs` and `Ingest.gs`. |
+| `Admin.gs` | The custom menu, `onEdit`, the one-time `public_display` migration, and the manual `TEST_*`/`verifySystem` helpers. |
+
+When mirroring a change from the live editor back into this repo (or vice
+versa), copy **all** files that changed — a partial copy across this many
+files is the main new risk this split introduces; see "Should we use clasp?"
+for how to avoid that risk entirely.
 
 This supersedes the "Tito is not implemented" / "`tito-webhook` is still future
 work" notes elsewhere in this repo's docs — the Tito webhook exists, just outside
@@ -15,7 +35,8 @@ consistent with this one.
 
 ## What it does
 
-Three responsibilities live in one script:
+Three responsibilities live in this one Apps Script project (across the
+files listed above):
 
 1. **Sheet prep/repair** (`prepareAllSheets`, `applyProtections_`) — lays down
    data validation, the `total_score` formula, and range protections across the
@@ -222,11 +243,76 @@ discovering during the tournament:
   (both Tito ingest and club→master sync) stops with no external monitoring
   — only the in-sheet error log and (if configured) email alert, which
   themselves depend on the same account being able to run code at all.
-- **Docs/code drift.** `Code.gs` in this repo is a manually maintained mirror
-  of what's actually deployed in the Apps Script editor. Nothing enforces
-  that future edits made live in the editor get copied back here — treat this
-  file as documentation of the last-known state, and diff it against the live
-  project before trusting it fully.
+- **Docs/code drift.** The `.gs` files in this repo are a manually maintained
+  mirror of what's actually deployed in the Apps Script editor. Nothing
+  enforces that future edits made live in the editor get copied back here —
+  treat these files as documentation of the last-known state, and diff them
+  against the live project before trusting them fully. Splitting into
+  multiple files (this revision) makes this a little easier to get partially
+  wrong, since a change can touch several files at once — see "Should we use
+  clasp?" below for the actual fix.
 - **No automated tests.** The `TEST_*` functions are manual, run-by-hand
   checks in the Apps Script editor; there's no CI coverage for this script,
   unlike the rest of the repo's `npm test` suite.
+
+## Should we use clasp?
+
+[`clasp`](https://github.com/google/clasp) ("Command Line Apps Script
+Projects") is Google's official CLI for Apps Script. Instead of copy-pasting
+between this repo and the browser editor, it lets you:
+
+- `clasp clone <scriptId>` — pull the live project's actual files down locally.
+- `clasp push` — push local files up, overwriting the project's current
+  (HEAD) source.
+- `clasp pull` — pull the live project down again, to capture anything
+  someone edited directly in the browser.
+- `clasp deploy` — create a new Web App/API executable **version** (this is
+  the step that would move the Tito webhook off "Version 1" onto whatever's
+  newer — a deliberate action, never automatic).
+- `clasp open` — opens the project in the browser editor.
+
+**We should use it.** It directly closes the docs/code drift risk above,
+which this multi-file split made slightly worse: with clasp, git *is* the
+source of truth (`clasp push`/`clasp pull` against the real project ID)
+instead of a manually maintained mirror, and a sync is one command instead of
+copy-pasting N files and hoping none were missed.
+
+A few things worth knowing before adopting it:
+
+- **The first step is a real, one-time reconciliation, not automation.**
+  `clasp clone` against the actual live script ID will pull down whatever's
+  *really* deployed right now — which may not match this repo's mirror,
+  especially since none of this session's fixes have been copied into the
+  live editor yet. That diff needs a careful manual look once, before anyone
+  ever runs `clasp push` for real.
+- **Script Properties (`REGISTRATION_INGEST_TOKEN`, `INGEST_ALERT_EMAIL`) are
+  not part of the pushed/pulled files** — they're a separate per-project
+  key/value store, so clasp syncing source code can't accidentally leak or
+  overwrite them.
+- **`clasp push` updates HEAD, not the pinned Web App version.** That's
+  actually a good fit for what's already set up: HEAD is what every
+  time-driven and simple trigger always runs anyway (see the earlier
+  discussion of the Executions log), so auto-pushing keeps `Sync.gs`/`Repair.gs`/`Admin.gs`
+  current automatically without touching the live Tito webhook, which stays
+  pinned to Version 1 until someone deliberately runs `clasp deploy`.
+
+**Can this run in GitHub Actions?** Yes — this is a common, well-documented
+pattern:
+
+1. One person runs `clasp login` once, from a real browser, with a Google
+   account that has edit access to this Apps Script project. This produces a
+   local credentials file (`~/.clasprc.json`) — **this step needs a human;
+   it's an interactive OAuth consent flow, not something that can be scripted
+   or done on someone's behalf.**
+2. That file's contents get stored as a GitHub Actions secret (e.g.
+   `CLASP_CREDENTIALS`).
+3. A workflow (triggered on push to this branch/path, or manually) recreates
+   `~/.clasprc.json` from the secret and runs `clasp push` from
+   `google-apps-script/registration-sync/`.
+4. Optionally, a separate manually-triggered (`workflow_dispatch`) job runs
+   `clasp deploy` to cut a new Web App version — kept manual on purpose, so
+   the Tito webhook only changes when someone deliberately decides it should.
+
+I can write that workflow file once the initial `clasp clone`/reconciliation
+and the one-time `clasp login` have happened — those two steps need to come
+first and need a human with access to the live Google account.
