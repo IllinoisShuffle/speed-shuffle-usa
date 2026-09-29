@@ -1,0 +1,16 @@
+{
+  "scriptId": "117H8GyoXLHe_iQ0TxaPead1xVvOBSDMSJFddKipQXAmcSlmh63QhPYuQ",
+  "rootDir": "google-apps-script/registration-sync",
+  "scriptExtensions": [
+    ".gs",
+    ".js"
+  ],
+  "htmlExtensions": [
+    ".html"
+  ],
+  "jsonExtensions": [
+    ".json"
+  ],
+  "filePushOrder": [],
+  "skipSubdirectories": false
+}
