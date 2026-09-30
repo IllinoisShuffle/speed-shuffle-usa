@@ -155,8 +155,25 @@ function syncSessionsFromClubs_() {
         formatSessionDateCell_(
           row[cols.DATE - 1]
         );
+      var start =
+        formatSessionTimeCell_(
+          row[cols.START - 1]
+        );
+      var end =
+        formatSessionTimeCell_(
+          row[cols.END - 1]
+        );
 
-      if (!date) {
+      /*
+       * A club filling in a date before its start/end time (a normal,
+       * in-progress editing state, not an error) must not reach MASTER
+       * half-finished -- the public site's parser rejects the *entire*
+       * feed on any one malformed row (netlify/lib/sessions.ts), so one
+       * club's incomplete row would take down every club's sessions
+       * list. Same isolation principle as the header-drift skip above,
+       * just for a single row instead of a whole club.
+       */
+      if (!date || !start || !end) {
         return;
       }
 
@@ -169,8 +186,8 @@ function syncSessionsFromClubs_() {
       combined.push({
         club: club.id,
         date: date,
-        start: formatSessionTimeCell_(row[cols.START - 1]),
-        end: formatSessionTimeCell_(row[cols.END - 1]),
+        start: start,
+        end: end,
         note: String(row[cols.NOTE - 1] || '').trim()
       });
     });

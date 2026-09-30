@@ -182,6 +182,33 @@ test('syncSessionsFromClubs_ rebuilds MASTER Sessions from every club, skipping 
   assert.deepEqual(written.find((row) => row[0] === 'brooklyn'), ['brooklyn', '2026-10-09', '19:30', '21:00', '']);
 });
 
+test('syncSessionsFromClubs_ skips a row with a date but no start/end time yet, instead of writing it half-finished to MASTER', () => {
+  // A club filling out its Sessions tab typically enters the date first,
+  // before nailing down start/end time -- a normal in-progress editing
+  // state, not an error. The public site's parser rejects its *entire*
+  // feed on any one malformed row (netlify/lib/sessions.ts), so writing
+  // this half-finished row to MASTER would break every club's sessions
+  // list, not just this one club's.
+  const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet } = loadRegistrationSync();
+  const master = seedMasterSessions();
+  const cols = fns.resolveColumnsFor_(master, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
+  ALL_CLUBS.forEach((id) => seedClubSessions(id));
+
+  const chicago = seedClubSessions('chicago');
+  chicago.getRange(2, cols.DATE).setValue('2026-10-07');
+  // start_time and end_time left blank.
+
+  const brooklyn = seedClubSessions('brooklyn');
+  brooklyn.getRange(2, cols.DATE).setValue('2026-10-09');
+  brooklyn.getRange(2, cols.START).setValue('19:30');
+  brooklyn.getRange(2, cols.END).setValue(''); // half-filled-in end time
+
+  const result = fns.syncSessionsFromClubs_();
+  assert.equal(result.written, 0);
+  assert.equal(result.skippedClubs.length, 0); // not a header problem, just an incomplete row
+  assert.deepEqual(masterSessionsSheet()!.getRange(2, 1, 1, 4).getValues()[0], ['', '', '', '']);
+});
+
 test("syncSessionsFromClubs_ always uses the club's own configured id, never trusting a club sheet's own club cell", () => {
   const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet } = loadRegistrationSync();
   seedMasterSessions();
