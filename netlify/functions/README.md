@@ -16,9 +16,18 @@ mistaken for deployable functions. Public mode is for a link-accessible syntheti
 test sheet; private mode uses a Google service account with read-only Sheets scope.
 Configuration and sheet layout are documented in the root README and `.env.example`.
 
-There is no `tito-webhook` Netlify function, and none is planned here: Tito
-registration ingest is handled outside this repo by a Google Apps Script Web
-App bound to the ADMIN master sheet, which verifies Tito events and
-idempotently upserts rows by `registration_id`, preserving manually entered
-scores. See `google-apps-script/registration-sync/` at the repo root for a
-mirrored copy of that script and how to test it end-to-end.
+`tito-webhook.ts` is a POST-only proxy in front of the Apps Script Tito-ingest
+Web App (see `google-apps-script/registration-sync/` at the repo root for that
+script — it still owns auth, mapping, and the sheet writes). It exists only
+because Apps Script Web Apps always answer with a 302 to a second, GET-only
+content URL before the real response is delivered, and Tito's webhook sender
+doesn't complete that hop — it sees the bare 302 as a delivery failure and
+retries the same event for hours, risking Tito disabling the webhook, even
+though the registration already landed (Apps Script runs `doPost` to
+completion before issuing the redirect). This function forwards Tito's POST
+(body, and query string including the shared `token`) to
+`TITO_WEBHOOK_TARGET_URL`, lets `fetch` complete the redirect the way a
+browser would, and returns the real upstream status/body to Tito. Non-POST
+requests return 405; a missing target URL returns 500; a failure reaching the
+Apps Script URL returns 502 without leaking the URL (it carries the shared
+ingest token).

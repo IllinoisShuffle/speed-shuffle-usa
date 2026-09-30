@@ -386,11 +386,16 @@ function mapTitoPayloadToRegistration_(
 
 
 /*
- * Apps Script Web Apps always answer HTTP 200, regardless of what
- * doPost returns — there is no way to make Tito's own webhook retry
- * trigger on failure. logSystemError_ (in ErrorLog.gs) is the
- * substitute: a durable, human-visible record of any registration
- * that failed to apply, so it can be replayed by hand.
+ * doPost's return value never reaches the caller as a distinct HTTP status —
+ * Apps Script always answers with a 302 to a second content URL first, and
+ * whatever doPost returned (200, always) only shows up once that redirect is
+ * followed. There is no way to make Tito's own webhook retry trigger on an
+ * application-level failure here. (The 302 itself tripped up Tito's webhook
+ * sender too, which doesn't complete that hop — see the repo's
+ * netlify/functions/tito-webhook.ts proxy, which fixes that transport-level
+ * issue in front of this script.) logSystemError_ (in ErrorLog.gs) is the
+ * substitute for real failures: a durable, human-visible record of any
+ * registration that failed to apply, so it can be replayed by hand.
  */
 function doPost(e) {
   var contents =
