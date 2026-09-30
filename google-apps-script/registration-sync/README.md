@@ -154,17 +154,18 @@ cover.
   resend the event) — nothing retries it automatically. Unauthorized requests
   (bad/missing token) are logged nowhere — neither sheet nor Cloud Logging —
   to avoid filling both with scanner noise from the public webhook URL.
-- **Alerting is throttled on the GCP side, not in the script.** A Cloud
-  Monitoring alerting policy ("Registration Sync Errors") fires on any
-  `severity=ERROR` log entry from this project and emails the configured
-  notification channels, rate-limited to one notification per open incident
-  per hour (`alertStrategy.notificationRateLimit` on the policy — see
-  "Cloud Logging / alerting" below). This replaces an earlier in-script
-  cooldown (`notifySystemFailure_`/`shouldSendAlertEmail_`, removed) that
-  tracked a per-source last-sent timestamp in Script Properties; that
-  throttling now lives entirely in the alerting policy's config, not in code.
-  The `Failed Webhooks` sheet itself is never throttled either way — every
-  `tito_ingest` occurrence still gets its own row.
+- **Alerting is throttled on the GCP side, not in the script.** Two Cloud
+  Monitoring alerting policies fire on `severity=ERROR` log entries from this
+  project and email the configured notification channels — one scoped to
+  `syncFromClubsNow` (30-minute rate limit, since it's a recurring-trigger
+  source), one for everything else (5-minute rate limit — see "Cloud Logging
+  / alerting" below for why the split and why 5 minutes is as tight as GCP
+  allows). This replaces an earlier in-script cooldown
+  (`notifySystemFailure_`/`shouldSendAlertEmail_`, removed) that tracked a
+  per-source last-sent timestamp in Script Properties; that throttling now
+  lives entirely in the alerting policies' config, not in code. The `Failed
+  Webhooks` sheet itself is never throttled either way — every `tito_ingest`
+  occurrence still gets its own row.
 - **A broken club doesn't take down the others.** If one club sheet's headers
   are broken, `syncFromClubsNow` logs it (`club_sync:<club id>`) and skips
   just that club, continuing the sync for the remaining four. If MASTER's own
@@ -183,9 +184,9 @@ cover.
   transcript, which nobody checks routinely. It's real data drift, not a
   transient error, so it now also goes to Cloud Logging on every sync run
   where it's still unresolved, under `source:
-  club_sync:unmatched_ids` — subject to the same alert-policy rate limit as
-  any other error, so it's not a fresh notification every minute the issue
-  persists.
+  club_sync:unmatched_ids` — subject to the Club Sync alert policy's
+  30-minute rate limit like any other `syncFromClubsNow` failure, so it's
+  not a fresh notification every 10-minute sync cycle the issue persists.
 
 ## Required Script Properties
 
@@ -231,12 +232,14 @@ and clean up the row afterward.
    severity=ERROR`) for the matching entry. This is what you're actually
    relying on in place of Tito-level retries — worth confirming it works
    before the tournament, not after a registration goes missing.
-6. **Alert delivery** — confirm the "Registration Sync Errors" alerting
-   policy actually emailed its notification channels for step 5's failure
-   (Monitoring → Alerting → Incidents in the GCP console, or just check the
-   inboxes). The policy rate-limits to one notification per open incident per
-   hour, so immediately repeating step 4 won't send a second email — that's
-   expected, not a bug; it's the GCP-side equivalent of the old cooldown.
+6. **Alert delivery** — confirm the "Registration Sync Errors -- Webhook /
+   Other" alerting policy actually emailed its notification channels for
+   step 5's failure (Monitoring → Alerting → Incidents in the GCP console,
+   or just check the inboxes; `tito_ingest` failures go through this policy,
+   not the Club Sync one). It rate-limits to one notification per open
+   incident per 5 minutes, so immediately repeating step 4 within that
+   window won't send a second email — that's expected, not a bug; it's the
+   GCP-side equivalent of the old cooldown.
 7. **Column drift** — on a *test copy* of a club sheet (never a live one),
    reorder a couple of columns (e.g. swap `total_score` and `hide_publicly`)
    and confirm `TEST_titoBrooklynTicket`-style ingest still lands in the right
@@ -279,24 +282,45 @@ if that context is ever needed again).
   the `Failed Webhooks` sheet (it's the one source with a payload worth
   replaying by hand); `club_sync`/`club_sync:<id>`/`club_sync:unmatched_ids`
   are Cloud Logging only.
-- **Alerting policy "Registration Sync Errors"**
-  (`projects/speed-shuffle-usa/alertPolicies/14038953390881675978`) is a
-  log-based alert (`conditionMatchedLog`, not a metric-threshold condition —
-  metric-threshold conditions don't support notification rate limiting) on
-  the filter `resource.type="app_script_function" AND severity=ERROR`,
-  rate-limited to one notification per open incident per hour.
+- **Two alerting policies, split by `resource.labels.function_name`** (both
+  log-based/`conditionMatchedLog`, not metric-threshold — metric-threshold
+  conditions don't support notification rate limiting, and Cloud Monitoring
+  actually *requires* a rate limit on log-based policies, so "no limit" isn't
+  an option either):
+  - **"Registration Sync Errors -- Club Sync"**
+    (`projects/speed-shuffle-usa/alertPolicies/14038953390881675978`), filter
+    `resource.type="app_script_function" AND
+    resource.labels.function_name="syncFromClubsNow" AND severity=ERROR`,
+    rate-limited to one notification per 30 minutes. `syncFromClubsNow` is
+    the only function that ever produces a `club_sync`/`club_sync:<id>`/
+    `club_sync:unmatched_ids` error (Apps Script attributes
+    `resource.labels.function_name` to the top-level invoked function, not
+    the innermost one that actually threw), and it runs on a recurring
+    10-minute trigger — a persistent failure would otherwise re-fire the
+    alert every cycle, hence the longer window.
+  - **"Registration Sync Errors -- Webhook / Other"**
+    (`projects/speed-shuffle-usa/alertPolicies/1872205758743892680`), the
+    inverse filter (`function_name!="syncFromClubsNow"`), rate-limited to
+    one notification per 5 minutes — as tight as Cloud Monitoring allows.
+    Covers `tito_ingest` (the Tito webhook, `doPost`) plus any uncaught
+    exception from any other function (e.g. a stray `TEST_*` run). These are
+    event-driven, not trigger-loop-driven, so there's no repeat-every-cycle
+    risk to throttle harder against — the tech team should hear about nearly
+    every one of these as it happens.
 - **Notification channels**: individual email addresses (not a Google Group
   — `tech@illinoisshuffleboard.org` was tried first but never received
   Cloud Monitoring's verification email, likely a Group posting/moderation
   restriction; left in the policy unverified in case that gets fixed later).
-  Manage channels/policy from the GCP console (Monitoring → Alerting) on the
+  Same four channels are wired into both policies above. Manage
+  channels/policies from the GCP console (Monitoring → Alerting) on the
   `speed-shuffle-usa` project, or via `gcloud alpha monitoring channels`/
   `gcloud alpha monitoring policies` (the `sendVerificationCode`/`verify`
   channel-verification calls aren't wrapped by `gcloud` and need a raw
   `curl` against the Monitoring API).
-- **Log-based metric `registration_sync_errors`** (same filter as the alert)
-  also exists, for potential dashboarding — it's not wired into the alert
-  policy itself.
+- **Log-based metric `registration_sync_errors`** (matches every
+  `severity=ERROR` entry, same as the two policies combined) also exists,
+  for potential dashboarding — it's not wired into either alert policy
+  itself.
 - **OAuth consent screen is Internal audience** (available because the GCP
   project is Workspace-owned) — only accounts in that Workspace can
   authorize/run functions in the Apps Script editor; anyone with just Drive
@@ -321,8 +345,8 @@ discovering during the tournament:
   the same way `logSystemError_` did.
 - **No true webhook retry.** As above: Apps Script Web Apps can't return a
   non-200 status, so Tito can never know an ingest failed and cannot retry it
-  for us. The `Failed Webhooks` sheet and the Cloud Monitoring alerting policy
-  ("Registration Sync Errors," see "Cloud Logging / alerting" below) turn
+  for us. The `Failed Webhooks` sheet and the "Webhook / Other" Cloud
+  Monitoring alerting policy (see "Cloud Logging / alerting" below) turn
   "silently lost" into "visible, but still requires a human to replay it by
   hand."
 - **Column reordering/renaming is handled; a genuinely malformed sheet still
