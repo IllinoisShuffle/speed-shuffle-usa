@@ -6,7 +6,12 @@ standings and club participation counts. It never returns private fields, raw Go
 errors, or exact scores before the central reveal flag permits them. Failed reads
 return 503, never mock data. Non-GET requests return 405.
 
-The Google reader and row parser live in `netlify/lib/` so helper modules are not
+`sessions-data.ts` is a real GET endpoint that reads a separate `Sessions` tab in
+the same spreadsheet, where each club maintains its own upcoming session dates. It
+validates club IDs, dates, and times, and returns them sorted chronologically.
+Failed reads return 503, never mock or stale data. Non-GET requests return 405.
+
+The Google reader and row parsers live in `netlify/lib/` so helper modules are not
 mistaken for deployable functions. Public mode is for a link-accessible synthetic
 test sheet; private mode uses a Google service account with read-only Sheets scope.
 Configuration and sheet layout are documented in the root README and `.env.example`.

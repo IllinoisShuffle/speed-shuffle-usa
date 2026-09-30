@@ -11,11 +11,10 @@ export function spreadsheetId(value: string) {
   return id;
 }
 
-export async function readMasterSheet(): Promise<Cell[][]> {
-  if (!process.env.SHEETS_SPREADSHEET_ID?.trim()) throw new SheetError('The master sheet connection has not been configured yet.');
+async function readSheetTab(range: string, gid: string): Promise<Cell[][]> {
+  if (!process.env.SHEETS_SPREADSHEET_ID?.trim()) throw new SheetError('The sheet connection has not been configured yet.');
   const id = spreadsheetId(process.env.SHEETS_SPREADSHEET_ID);
   if (process.env.SHEETS_ACCESS === 'public') {
-    const gid = process.env.SHEETS_GID?.trim() || '0';
     if (!/^\d+$/.test(gid)) throw new SheetError('Set the numeric tab ID for the shared test sheet.');
     const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
@@ -32,10 +31,17 @@ export async function readMasterSheet(): Promise<Cell[][]> {
     ...(email && key ? { credentials: { client_email: email, private_key: key.replace(/\\n/g, '\n') } } : {}),
   });
   const client = await auth.getClient();
-  const range = process.env.SHEETS_RANGE?.trim() || 'Players!A1:Z';
   const response = await client.request<{ values?: Cell[][] }>({
     url: `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(range)}`,
     params: { valueRenderOption: 'UNFORMATTED_VALUE' }, timeout: 10000,
   });
   return response.data.values ?? [];
+}
+
+export async function readMasterSheet(): Promise<Cell[][]> {
+  return readSheetTab(process.env.SHEETS_RANGE?.trim() || 'Players!A1:Z', process.env.SHEETS_GID?.trim() || '0');
+}
+
+export async function readSessionsSheet(): Promise<Cell[][]> {
+  return readSheetTab(process.env.SHEETS_SESSIONS_RANGE?.trim() || 'Sessions!A1:Z', process.env.SHEETS_SESSIONS_GID?.trim() || '0');
 }
