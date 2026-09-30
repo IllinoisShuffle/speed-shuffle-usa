@@ -10,7 +10,7 @@ const SCRIPT_DIR = path.join(import.meta.dirname, '..', 'google-apps-script', 'r
 // file into one shared global scope regardless of order.
 const FILES = ['Repair.gs', 'Admin.gs', 'Sessions.gs', 'Sync.gs', 'Ingest.gs', 'ErrorLog.gs', 'Columns.gs', 'Config.gs'];
 
-type CellValue = string | number | boolean;
+type CellValue = string | number | boolean | Date;
 
 class FakeRange {
   sheet: FakeSheet; row: number; col: number; numRows: number; numCols: number;
@@ -105,6 +105,8 @@ type RegistrationSyncApi = {
   syncFromClubsNow_(): void;
   syncFromClubsNow(): void;
   syncSessionsFromClubs_(): { written: number; skippedClubs: string[] };
+  formatSessionDateCell_(value: unknown): string;
+  formatSessionTimeCell_(value: unknown): string;
   SESSIONS_SHEET: string;
   SESSIONS_HEADER_ORDER: string[];
   SESSIONS_HEADER_KEYS: string[];
@@ -144,7 +146,20 @@ export function loadRegistrationSync() {
         deleteProperty: (k: string) => { properties.delete(k); },
       }),
     },
-    Utilities: { formatDate: (date: Date) => date.toISOString().slice(0, 10) },
+    Utilities: {
+      // A real, if minimal, implementation (honors timeZone and the
+      // 'yyyy'/'MM'/'dd'/'HH'/'mm' tokens actually used in this project)
+      // rather than an ISO-date-only stub -- Sessions.gs's date/time-cell
+      // normalization depends on both the timezone and the 'HH:mm' pattern
+      // being respected, not just 'yyyy-MM-dd'.
+      formatDate: (date: Date, timeZone: string, pattern: string) => {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+        }).formatToParts(date).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {} as Record<string, string>);
+        const hour = parts.hour === '24' ? '00' : parts.hour;
+        return pattern.replace('yyyy', parts.year).replace('MM', parts.month).replace('dd', parts.day).replace('HH', hour).replace('mm', parts.minute);
+      },
+    },
     Session: { getScriptTimeZone: () => 'America/Los_Angeles' },
     ContentService: {
       MimeType: { JSON: 'JSON' },
@@ -184,6 +199,14 @@ export function loadRegistrationSync() {
   vm.runInContext(source, sandbox, { filename: 'registration-sync.gs' });
 
   const fns = sandbox as unknown as RegistrationSyncApi;
+
+  // The vm sandbox has its own realm, so a `new Date(...)` built in this
+  // test file is NOT `instanceof Date` inside it -- `value instanceof Date`
+  // checks in the .gs source (e.g. formatSessionDateCell_) need a Date
+  // constructed via the sandbox's own Date constructor to see it as one,
+  // the same way a real Apps Script Date returned by getValues() would be.
+  const SandboxDate = vm.runInContext('Date', sandbox) as DateConstructor;
+  const sheetDate = (utcMillis: number): Date => new SandboxDate(utcMillis);
 
   const seedMaster = (headers?: string[]): FakeSheet => {
     const sheet = admin.sheet(fns.MASTER_SHEET);
@@ -226,5 +249,6 @@ export function loadRegistrationSync() {
     fns, admin, mail, properties, logs, triggers,
     seedMaster, seedClub, clubSheet, failedWebhooks,
     seedMasterSessions, seedClubSessions, masterSessionsSheet,
+    sheetDate,
   };
 }
