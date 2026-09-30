@@ -116,13 +116,21 @@ function ensureMasterSessionsSheet_() {
     );
 
   if (!sheet) {
-    throw new Error(
-      'Sessions sheet not found in ADMIN workbook. Create a tab named "' +
-      SESSIONS_SHEET +
-      '" with headers: ' +
-      SESSIONS_HEADER_ORDER.join(', ') +
-      '.'
-    );
+    sheet =
+      ss.insertSheet(
+        SESSIONS_SHEET
+      );
+
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        SESSIONS_HEADER_ORDER.length
+      )
+      .setValues([
+        SESSIONS_HEADER_ORDER
+      ]);
   }
 
   return sheet;
@@ -133,11 +141,14 @@ function ensureMasterSessionsSheet_() {
  * Each club's own Sessions tab lives in their own workbook, alongside
  * their Players tab — never a shared tab in the ADMIN workbook, for
  * the same reason club managers only ever get edit access to their
- * own workbook's Players tab (see Config.gs). Unlike
- * ensureClubPlayersSheet_(), there is no "first sheet" fallback: a
- * brand-new Sessions tab has no legacy name to fall back to, so a
- * missing one is always a clear, loud error naming exactly what to
- * create.
+ * own workbook's Players tab (see Config.gs). A missing tab is
+ * auto-created with its header row (same as
+ * ensureMasterSessionsSheet_() / ensureFailedWebhooksSheet_() in
+ * ErrorLog.gs) — no manual setup step required. A tab that already
+ * exists but has a missing/renamed/duplicated required header is a
+ * different case (real data drift) and is left alone here;
+ * resolveColumnsFor_() throws loudly on that, same as it does for
+ * Players.
  */
 function ensureClubSessionsSheet_(clubId) {
   var club =
@@ -160,15 +171,21 @@ function ensureClubSessionsSheet_(clubId) {
     );
 
   if (!sheet) {
-    throw new Error(
-      'Sessions sheet not found for club: ' +
-      clubId +
-      '. Create a tab named "' +
-      SESSIONS_SHEET +
-      '" with headers: ' +
-      SESSIONS_HEADER_ORDER.join(', ') +
-      '.'
-    );
+    sheet =
+      clubSs.insertSheet(
+        SESSIONS_SHEET
+      );
+
+    sheet
+      .getRange(
+        1,
+        1,
+        1,
+        SESSIONS_HEADER_ORDER.length
+      )
+      .setValues([
+        SESSIONS_HEADER_ORDER
+      ]);
   }
 
   return sheet;

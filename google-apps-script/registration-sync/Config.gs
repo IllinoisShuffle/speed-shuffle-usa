@@ -89,7 +89,10 @@
  * Each club keeps a "Sessions" tab in their own workbook, alongside
  * their Players tab — the same reason Players is per-club instead of
  * one shared MASTER tab: club managers must never need edit (or even
- * read) access to the ADMIN/MASTER spreadsheet. Sessions.gs mirrors
+ * read) access to the ADMIN/MASTER spreadsheet. No manual setup is
+ * needed: ensureMasterSessionsSheet_()/ensureClubSessionsSheet_()
+ * (Admin.gs) auto-create a missing tab with its header row, the same
+ * way ensureFailedWebhooksSheet_() (ErrorLog.gs) does. Sessions.gs mirrors
  * every club's Sessions tab into a "Sessions" tab in the ADMIN
  * workbook, as a second phase of the same 10-minute sync as scores.
  * Unlike the score sync, there is no per-row identity to match on

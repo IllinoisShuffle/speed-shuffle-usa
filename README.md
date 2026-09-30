@@ -124,6 +124,8 @@ Apps Script sync — the same one that copies scores from each club sheet into
 MASTER, run every 10 minutes — mirrors each club's `Sessions` tab into this one.
 See `google-apps-script/registration-sync/` (`Sessions.gs`) for that sync; this
 repo's Netlify function only ever reads the result, here in the shared spreadsheet.
+A missing `Sessions` tab, on MASTER or any club workbook, is auto-created (with its
+header row) the first time the sync runs — no manual setup step needed.
 
 `SHEETS_SESSIONS_RANGE` / `SHEETS_SESSIONS_GID` point at this tab, reusing the same
 `SHEETS_SPREADSHEET_ID` and `SHEETS_ACCESS` mode as the `Players` tab (see above).
