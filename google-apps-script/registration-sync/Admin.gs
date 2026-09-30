@@ -14,7 +14,7 @@ function onOpen() {
     .getUi()
     .createMenu(SS_MENU)
     .addItem(
-      'Sync Scores From Clubs Now',
+      'Sync Scores & Sessions From Clubs Now',
       'syncFromClubsNow'
     )
     .addItem(
@@ -102,6 +102,76 @@ function ensureClubPlayersSheet_(clubId) {
   }
 
   return players;
+}
+
+
+function ensureMasterSessionsSheet_() {
+  var ss =
+    SpreadsheetApp
+      .getActiveSpreadsheet();
+
+  var sheet =
+    ss.getSheetByName(
+      SESSIONS_SHEET
+    );
+
+  if (!sheet) {
+    throw new Error(
+      'Sessions sheet not found in ADMIN workbook. Create a tab named "' +
+      SESSIONS_SHEET +
+      '" with headers: ' +
+      SESSIONS_HEADER_ORDER.join(', ') +
+      '.'
+    );
+  }
+
+  return sheet;
+}
+
+
+/*
+ * Each club's own Sessions tab lives in their own workbook, alongside
+ * their Players tab — never a shared tab in the ADMIN workbook, for
+ * the same reason club managers only ever get edit access to their
+ * own workbook's Players tab (see Config.gs). Unlike
+ * ensureClubPlayersSheet_(), there is no "first sheet" fallback: a
+ * brand-new Sessions tab has no legacy name to fall back to, so a
+ * missing one is always a clear, loud error naming exactly what to
+ * create.
+ */
+function ensureClubSessionsSheet_(clubId) {
+  var club =
+    getClubById_(clubId);
+
+  if (!club) {
+    throw new Error(
+      'Unknown club ID: ' + clubId
+    );
+  }
+
+  var clubSs =
+    SpreadsheetApp.openById(
+      club.workbookId
+    );
+
+  var sheet =
+    clubSs.getSheetByName(
+      SESSIONS_SHEET
+    );
+
+  if (!sheet) {
+    throw new Error(
+      'Sessions sheet not found for club: ' +
+      clubId +
+      '. Create a tab named "' +
+      SESSIONS_SHEET +
+      '" with headers: ' +
+      SESSIONS_HEADER_ORDER.join(', ') +
+      '.'
+    );
+  }
+
+  return sheet;
 }
 
 

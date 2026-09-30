@@ -105,8 +105,8 @@ one registered. These are Google Sheet records, not bundled frontend mock arrays
 
 ## Sessions tab layout
 
-A separate `Sessions` tab, in the same spreadsheet, holds each club's own upcoming
-session dates for the club directory. One header row; column order may change,
+A separate `Sessions` tab, in the same spreadsheet as `Players`/MASTER, holds the
+club directory's upcoming session dates. One header row; column order may change,
 headers must remain unique. Required column names:
 
 - `club`: `chicago`, `brooklyn`, `st-pete`, `tampa`, or `beachside`.
@@ -114,9 +114,16 @@ headers must remain unique. Required column names:
 - `start_time` / `end_time`: 24h `HH:mm`. `end_time` must be after `start_time`.
 
 Optional: `note`. A row with a blank `club` cell is skipped, so a blank template
-row at the bottom of the tab is fine. Each club can add, remove, or reorder their
-own rows freely; there is no matching/de-duplication key like `registration_id`,
-since sessions are just schedule data, not player records.
+row at the bottom of the tab is fine. There is no matching/de-duplication key like
+`registration_id`, since sessions are just schedule data, not player records.
+
+**This tab is not club-editable.** Like `Players`/MASTER, club managers must never
+need direct access to this spreadsheet. Each club instead maintains its own
+`Sessions` tab in their own workbook (next to their own `Players` tab), and a Google
+Apps Script sync — the same one that copies scores from each club sheet into
+MASTER, run every 10 minutes — mirrors each club's `Sessions` tab into this one.
+See `google-apps-script/registration-sync/` (`Sessions.gs`) for that sync; this
+repo's Netlify function only ever reads the result, here in the shared spreadsheet.
 
 `SHEETS_SESSIONS_RANGE` / `SHEETS_SESSIONS_GID` point at this tab, reusing the same
 `SHEETS_SPREADSHEET_ID` and `SHEETS_ACCESS` mode as the `Players` tab (see above).
@@ -163,11 +170,12 @@ Nick can deploy his fork on his paid Netlify account when ready. Set the chosen
 Google environment variables in that site's function environment. Nothing has been
 pushed, linked, or deployed by this implementation.
 
-Tito registration ingest and club-sheet-to-master aggregation are implemented,
-but outside this repo: a Google Apps Script project bound to the ADMIN master
-sheet runs a `doPost` webhook that Tito calls on ticket events, plus a 10-minute
-club→master sync trigger. See `google-apps-script/registration-sync/` for a
-mirrored copy of that source and how it works. Lauren can still create her own
+Tito registration ingest and club-sheet-to-master aggregation (scores and
+sessions) are implemented, but outside this repo: a Google Apps Script project
+bound to the ADMIN master sheet runs a `doPost` webhook that Tito calls on ticket
+events, plus a 10-minute club→master sync trigger that syncs both scores and
+session dates. See `google-apps-script/registration-sync/` for a mirrored copy of
+that source and how it works. Lauren can still create her own
 test sheets using the same layout; the application is not dependent on her sheet
 setup. Production Google permissions and final tie/payout rules remain separate
 work. Proctors still record on paper and enter four end scores in their own

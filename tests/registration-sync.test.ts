@@ -155,6 +155,95 @@ test('syncFromClubsNow_ never reads or writes hide_publicly, in either direction
   assert.equal(master.getRange(2, cols.HIDE).getValue(), true);
 });
 
+test('syncSessionsFromClubs_ rebuilds MASTER Sessions from every club, skipping blank template rows', () => {
+  const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet } = loadRegistrationSync();
+  const master = seedMasterSessions();
+  const cols = fns.resolveColumnsFor_(master, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
+  ALL_CLUBS.forEach((id) => seedClubSessions(id)); // every club has an (empty) Sessions tab
+
+  const brooklyn = seedClubSessions('brooklyn');
+  brooklyn.getRange(2, cols.DATE).setValue('2026-10-09');
+  brooklyn.getRange(2, cols.START).setValue('19:30');
+  brooklyn.getRange(2, cols.END).setValue('21:00');
+  brooklyn.getRange(3, cols.DATE).setValue(''); // blank template row -- must be skipped
+
+  const chicago = seedClubSessions('chicago');
+  chicago.getRange(2, cols.DATE).setValue('2026-10-07');
+  chicago.getRange(2, cols.START).setValue('18:00');
+  chicago.getRange(2, cols.END).setValue('20:00');
+  chicago.getRange(2, cols.NOTE).setValue('Bring your own broom');
+
+  const result = fns.syncSessionsFromClubs_();
+  assert.equal(result.written, 2);
+  assert.equal(result.skippedClubs.length, 0);
+
+  const written = masterSessionsSheet()!.getRange(2, 1, 2, 5).getValues();
+  assert.deepEqual(written.find((row) => row[0] === 'chicago'), ['chicago', '2026-10-07', '18:00', '20:00', 'Bring your own broom']);
+  assert.deepEqual(written.find((row) => row[0] === 'brooklyn'), ['brooklyn', '2026-10-09', '19:30', '21:00', '']);
+});
+
+test("syncSessionsFromClubs_ always uses the club's own configured id, never trusting a club sheet's own club cell", () => {
+  const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet } = loadRegistrationSync();
+  seedMasterSessions();
+  const cols = fns.resolveColumnsFor_(masterSessionsSheet()!, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
+
+  const brooklyn = seedClubSessions('brooklyn');
+  brooklyn.getRange(2, cols.CLUB).setValue('chicago'); // spoofed/incorrect value
+  brooklyn.getRange(2, cols.DATE).setValue('2026-10-09');
+  brooklyn.getRange(2, cols.START).setValue('19:30');
+  brooklyn.getRange(2, cols.END).setValue('21:00');
+
+  fns.syncSessionsFromClubs_();
+  assert.equal(masterSessionsSheet()!.getRange(2, cols.CLUB).getValue(), 'brooklyn');
+});
+
+test('syncSessionsFromClubs_ isolates a club with a missing tab or broken headers, still syncs the others', () => {
+  const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet, logs } = loadRegistrationSync();
+  seedMasterSessions();
+  const cols = fns.resolveColumnsFor_(masterSessionsSheet()!, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
+
+  const brooklyn = seedClubSessions('brooklyn');
+  brooklyn.getRange(2, cols.DATE).setValue('2026-10-09');
+  brooklyn.getRange(2, cols.START).setValue('19:30');
+  brooklyn.getRange(2, cols.END).setValue('21:00');
+
+  seedClubSessions('chicago', fns.SESSIONS_HEADER_ORDER.map((h) => (h === 'date' ? 'date_typo' : h)));
+  // beachside, st-pete, tampa: no Sessions tab created at all yet
+
+  const result = fns.syncSessionsFromClubs_();
+  assert.equal(result.written, 1);
+  assert.equal(result.skippedClubs.length, 4);
+  const summary = logs.join('\n');
+  assert.match(summary, /\[session_sync:chicago\]/);
+  assert.match(summary, /\[session_sync:beachside\]/);
+});
+
+test('syncSessionsFromClubs_ fully rebuilds MASTER on every run -- a row removed from a club sheet disappears', () => {
+  const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet } = loadRegistrationSync();
+  seedMasterSessions();
+  const cols = fns.resolveColumnsFor_(masterSessionsSheet()!, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
+  const brooklyn = seedClubSessions('brooklyn');
+  brooklyn.getRange(2, cols.DATE).setValue('2026-10-09');
+  brooklyn.getRange(2, cols.START).setValue('19:30');
+  brooklyn.getRange(2, cols.END).setValue('21:00');
+
+  assert.equal(fns.syncSessionsFromClubs_().written, 1);
+
+  brooklyn.getRange(2, cols.DATE).setValue(''); // club deletes/clears their only session
+  assert.equal(fns.syncSessionsFromClubs_().written, 0);
+  assert.equal(masterSessionsSheet()!.getRange(2, cols.DATE).getValue(), ''); // no stale leftover row
+});
+
+test('syncFromClubsNow_ runs the Sessions sync too, isolated from a broken MASTER Sessions tab', () => {
+  const { fns, seedMaster, seedClub, logs } = loadRegistrationSync();
+  ALL_CLUBS.forEach((id) => seedClub(id));
+  seedMaster();
+  // No MASTER Sessions tab at all -- ensureMasterSessionsSheet_ throws.
+
+  assert.doesNotThrow(() => fns.syncFromClubsNow_());
+  assert.match(logs.join('\n'), /\[session_sync\] Sessions sheet not found in ADMIN workbook/);
+});
+
 test('doPost rejects a bad token without writing Failed Webhooks, accepts a valid ticket', () => {
   const { fns, properties, seedMaster, seedClub, failedWebhooks } = loadRegistrationSync();
   seedMaster();

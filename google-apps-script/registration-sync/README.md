@@ -15,10 +15,11 @@ this has no effect on behavior, locking, or Script Properties:
 
 | File | Responsibility |
 | --- | --- |
-| `Config.gs` | Every top-level constant: sheet/menu names, the canonical header list, the five club workbook IDs. |
-| `Columns.gs` | Header-name column resolution (`resolveColumns_`) — shared by every other file. |
+| `Config.gs` | Every top-level constant: sheet/menu names, the canonical header lists (registrations and sessions), the five club workbook IDs. |
+| `Columns.gs` | Header-name column resolution (`resolveColumns_`/`resolveColumnsFor_`) — shared by every other file. |
 | `Repair.gs` | Sheet formatting/protection setup — the "Repair All Sheets" menu item. |
-| `Sync.gs` | Club → Master sync and its 10-minute time trigger. |
+| `Sync.gs` | Club → Master score sync and its 10-minute time trigger (also runs the Sessions sync below, as a second phase of the same trigger). |
+| `Sessions.gs` | Club → Master Sessions sync — mirrors each club's own `Sessions` tab into MASTER's `Sessions` tab. |
 | `Ingest.gs` | The Tito webhook (`doPost`) and registration upsert. |
 | `ErrorLog.gs` | `console.error` → Cloud Logging for every failure (shared by `Sync.gs` and `Ingest.gs`), plus the `Failed Webhooks` sheet for `tito_ingest` specifically. |
 | `Admin.gs` | The custom menu and the manual `TEST_*`/`verifySystem`/`FIX_*` helpers. |
@@ -35,7 +36,7 @@ consistent with this one.
 
 ## What it does
 
-Three responsibilities live in this one Apps Script project (across the
+Four responsibilities live in this one Apps Script project (across the
 files listed above):
 
 1. **Sheet prep/repair** (`prepareAllSheets`, `applyProtections_`) — lays down
@@ -68,6 +69,22 @@ files listed above):
    token, maps the Tito ticket JSON to this project's registration shape, and
    upserts one row into both the MASTER sheet and the matching club sheet,
    keyed on `registration_id`.
+4. **Club → Master Sessions sync** (`syncSessionsFromClubs_`, `Sessions.gs`) —
+   runs as a second phase inside the same `syncFromClubsNow`/10-minute trigger
+   as the score sync above, so there is no separate schedule. Each club keeps
+   its own `Sessions` tab (`club`, `date`, `start_time`, `end_time`, `note`) in
+   their own workbook, next to their `Players` tab — never a shared tab in the
+   ADMIN workbook, for the same access-isolation reason `Players` is per-club.
+   Unlike the score sync, there's no `registration_id`-equivalent identity to
+   match rows on, so MASTER's `Sessions` tab isn't merged — it's fully rebuilt
+   from the current contents of all five club `Sessions` tabs on every run. A
+   row a club deletes from their own tab disappears from MASTER on the next
+   sync (the correct behavior for a schedule, unlike scores, which are never
+   deleted). The public site (`netlify/lib/sessions.ts`) only ever reads
+   MASTER's `Sessions` tab, the same way it only reads MASTER for standings.
+   One club's missing tab or broken headers is isolated and logged
+   (`session_sync:<club id>`) without blocking the other four or the score
+   sync; a broken MASTER `Sessions` tab logs once under `session_sync`.
 
 ## Column resolution
 
