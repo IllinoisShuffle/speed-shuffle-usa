@@ -166,12 +166,11 @@ test('doPost rejects a bad token without writing System Errors, accepts a valid 
   assert.equal(good.result.club, 'chicago');
 });
 
-test('doPost logs an authenticated failure to System Errors and emails if INGEST_ALERT_EMAIL is set', () => {
-  const { fns, properties, seedMaster, seedClub, systemErrors, mail } = loadRegistrationSync();
+test('doPost logs an authenticated failure to System Errors and to Cloud Logging via console.error', () => {
+  const { fns, properties, seedMaster, seedClub, systemErrors, logs } = loadRegistrationSync();
   seedMaster();
   seedClub('chicago');
   properties.set('REGISTRATION_INGEST_TOKEN', 'secret');
-  properties.set('INGEST_ALERT_EMAIL', 'ops@example.invalid');
 
   const payload = { _type: 'ticket', slug: 'tito-2', first_name: 'X', release_slug: 'not-a-real-club' };
   const res = JSON.parse(fns.doPost({ parameter: { token: 'secret' }, postData: { contents: JSON.stringify(payload) } }).getContent());
@@ -179,24 +178,22 @@ test('doPost logs an authenticated failure to System Errors and emails if INGEST
   assert.match(res.error, /Could not map Tito release to club/);
 
   assert.equal(systemErrors()!.getRange(2, 2).getValue(), 'tito_ingest');
-  assert.equal(mail.length, 1);
-  assert.equal(mail[0].to, 'ops@example.invalid');
+  assert.match(logs.join('\n'), /\[tito_ingest\].*Could not map Tito release to club/);
 });
 
-test('repeated failures of the same source log every time but email only once per cooldown window', () => {
-  const { fns, properties, seedMaster, seedClub, systemErrors, mail } = loadRegistrationSync();
+test('repeated failures of the same source each get their own System Errors row and console.error entry -- no in-script throttling', () => {
+  const { fns, properties, seedMaster, seedClub, systemErrors, logs } = loadRegistrationSync();
   seedMaster();
   seedClub('chicago');
   properties.set('REGISTRATION_INGEST_TOKEN', 'secret');
-  properties.set('INGEST_ALERT_EMAIL', 'ops@example.invalid');
 
   const payload = { _type: 'ticket', slug: 'tito-3', release_slug: 'not-a-real-club' };
   const req = { parameter: { token: 'secret' }, postData: { contents: JSON.stringify(payload) } };
   fns.doPost(req);
-  fns.doPost(req); // same source ('tito_ingest'), well within the 1-hour cooldown
+  fns.doPost(req); // same source ('tito_ingest') -- throttling now lives in the GCP alerting policy, not the script
 
   assert.equal(systemErrors()!.getLastRow(), 3); // header + two logged failures
-  assert.equal(mail.length, 1); // but only the first sent an email
+  assert.equal(logs.filter((l) => l.includes('[tito_ingest]')).length, 2);
 });
 
 test('pauseSyncTrigger removes any trigger owned by the current account; installSyncTrigger resumes it', () => {

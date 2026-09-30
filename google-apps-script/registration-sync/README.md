@@ -20,7 +20,7 @@ this has no effect on behavior, locking, or Script Properties:
 | `Repair.gs` | Sheet formatting/protection setup — the "Repair All Sheets" menu item. |
 | `Sync.gs` | Club → Master sync and its 10-minute time trigger. |
 | `Ingest.gs` | The Tito webhook (`doPost`) and registration upsert. |
-| `ErrorLog.gs` | The `System Errors` sheet and optional, per-source rate-limited email alert, shared by `Sync.gs` and `Ingest.gs`. |
+| `ErrorLog.gs` | The `System Errors` sheet, plus a `console.error` that Cloud Logging picks up for the GCP alerting policy — shared by `Sync.gs` and `Ingest.gs`. |
 | `Admin.gs` | The custom menu and the manual `TEST_*`/`verifySystem`/`FIX_*` helpers. |
 
 When mirroring a change from the live editor back into this repo (or vice
@@ -88,8 +88,8 @@ As a result:
 - **Renaming, deleting, or duplicating a required header is not silently
   tolerated — it fails loudly instead.** `resolveColumns_` throws a specific
   "missing header X" / "duplicate header X" error naming the sheet, which
-  flows into the same failure path described below (logged to `System Errors`,
-  optionally emailed) rather than writing to the wrong column.
+  flows into the same failure path described below (logged to `System Errors`
+  and Cloud Logging) rather than writing to the wrong column.
 - **`prepareAllSheets` (the repair tool) is stricter on purpose**: it requires
   the canonical A:M order exactly (`assertCanonicalColumnOrder_`) and refuses
   to touch a sheet that's missing a header or already out of canonical order,
@@ -138,25 +138,29 @@ cover.
   Tito's own webhook delivery retry on failure. Instead, any error while
   processing an *authenticated* request (bad club mapping, broken headers,
   sheet full, etc.) is appended to a `System Errors` sheet tab in the ADMIN
-  workbook (timestamp, source, error, raw payload) via `logSystemError_`, and
-  optionally emailed via `notifySystemFailure_` if `INGEST_ALERT_EMAIL` is
-  set. The same sheet and helpers are also used by `syncFromClubsNow` (see
-  below), distinguished by the `source` column (`tito_ingest` vs
+  workbook (timestamp, source, error, raw payload) via `logSystemError_`,
+  which also emits a `console.error` picked up by Cloud Logging (this project
+  is associated with the `speed-shuffle-usa` GCP project, not Apps Script's
+  hidden default one — see "Cloud Logging / alerting" below). The same sheet
+  and helpers are also used by `syncFromClubsNow` (see below), distinguished
+  by the `source` column (`tito_ingest` vs
   `club_sync`/`club_sync:<club id>`/`club_sync:unmatched_ids`). A failed
   registration must be noticed and replayed by hand (e.g. re-running
   `addRegistration` with the logged payload, or asking Tito to resend the
   event) — nothing retries it automatically. Unauthorized requests (bad/missing
-  token) are neither logged nor emailed, to avoid filling the error sheet with
-  scanner noise from the public webhook URL.
-- **Email alerts are rate-limited per source.** `notifySystemFailure_` sends at
-  most one email per `source` per `ALERT_EMAIL_COOLDOWN_MS` (`Config.gs`, an
-  hour by default), tracked via a per-source last-sent timestamp in Script
-  Properties (`shouldSendAlertEmail_` in `ErrorLog.gs`). This matters because
-  `syncFromClubsNow` runs every minute: an unresolved, persistent failure (a
-  broken club sheet, a stuck `club_sync:unmatched_ids` row) would otherwise
-  send one email per run — up to ~1,440/day — long after the first email made
-  the point. The `System Errors` sheet is never throttled; every occurrence
-  still gets its own row regardless of whether the email was sent.
+  token) are neither logged to the sheet nor to Cloud Logging, to avoid
+  filling both with scanner noise from the public webhook URL.
+- **Alerting is throttled on the GCP side, not in the script.** A Cloud
+  Monitoring alerting policy ("Registration Sync Errors") fires on any
+  `severity=ERROR` log entry from this project and emails the configured
+  notification channels, rate-limited to one notification per open incident
+  per hour (`alertStrategy.notificationRateLimit` on the policy — see
+  "Cloud Logging / alerting" below). This replaces an earlier in-script
+  cooldown (`notifySystemFailure_`/`shouldSendAlertEmail_`, removed) that
+  tracked a per-source last-sent timestamp in Script Properties; that
+  throttling now lives entirely in the alerting policy's config, not in code.
+  The `System Errors` sheet itself is never throttled either way — every
+  occurrence still gets its own row.
 - **A broken club doesn't take down the others.** If one club sheet's headers
   are broken, `syncFromClubsNow` logs it (`club_sync:<club id>`) and skips
   just that club, continuing the sync for the remaining four. If MASTER's own
@@ -173,17 +177,17 @@ cover.
   row (typo, a row MASTER never got, a manual club-sheet entry) used to only
   show up in `Logger.log` output — visible solely in the Apps Script execution
   transcript, which nobody checks routinely. It's real data drift, not a
-  transient error, so it now also goes to `System Errors` on every sync run
-  where it's still unresolved, and to email under `source:
-  club_sync:unmatched_ids` — subject to the same per-source cooldown as any
-  other alert, so it's not a fresh email every minute the issue persists.
+  transient error, so it now also goes to `System Errors` and Cloud Logging
+  on every sync run where it's still unresolved, under `source:
+  club_sync:unmatched_ids` — subject to the same alert-policy rate limit as
+  any other error, so it's not a fresh notification every minute the issue
+  persists.
 
 ## Required Script Properties
 
 | Property | Purpose |
 | --- | --- |
 | `REGISTRATION_INGEST_TOKEN` | Shared secret the Tito webhook must send as `?token=` on the POST URL. Rotate by changing this and updating Tito's configured webhook URL together. |
-| `INGEST_ALERT_EMAIL` | Optional. If set, a failed *authenticated* ingest or club sync sends an email here in addition to the `System Errors` sheet row — throttled to at most one email per `source` per `ALERT_EMAIL_COOLDOWN_MS` (an hour by default; see `Config.gs`). Leave unset to rely on the sheet alone. |
 
 ## End-to-end test
 
@@ -218,17 +222,17 @@ and clean up the row afterward.
 5. **Failure path** — confirm the unknown-club case from step 4 also appended
    a row to the `System Errors` sheet tab in the ADMIN workbook (create it
    first if this is the first failure ever recorded; `source` should read
-   `tito_ingest`), and, if `INGEST_ALERT_EMAIL` is set, that the email
-   arrived. This is what you're actually relying on in place of Tito-level
-   retries — worth confirming it works before the tournament, not after a
-   registration goes missing.
-6. **Alert email cooldown** — immediately repeat step 4's unknown-club case a
-   second time. Confirm a *second* `System Errors` row is appended (the sheet
-   is never throttled) but no second email arrives. In the Apps Script
-   editor's Script Properties (Project Settings → Script Properties), delete
-   the `alertLastSent:tito_ingest` key (or wait out
-   `ALERT_EMAIL_COOLDOWN_MS`) and repeat once more to confirm the email
-   resumes once the cooldown has elapsed.
+   `tito_ingest`), and check Cloud Logging (Logs Explorer, project
+   `speed-shuffle-usa`, `resource.type="app_script_function" AND
+   severity=ERROR`) for the matching entry. This is what you're actually
+   relying on in place of Tito-level retries — worth confirming it works
+   before the tournament, not after a registration goes missing.
+6. **Alert delivery** — confirm the "Registration Sync Errors" alerting
+   policy actually emailed its notification channels for step 5's failure
+   (Monitoring → Alerting → Incidents in the GCP console, or just check the
+   inboxes). The policy rate-limits to one notification per open incident per
+   hour, so immediately repeating step 4 won't send a second email — that's
+   expected, not a bug; it's the GCP-side equivalent of the old cooldown.
 7. **Column drift** — on a *test copy* of a club sheet (never a live one),
    reorder a couple of columns (e.g. swap `total_score` and `hide_publicly`)
    and confirm `TEST_titoBrooklynTicket`-style ingest still lands in the right
@@ -253,6 +257,43 @@ rows) — testing it means editing `E:I` on a club sheet and confirming MASTER
 picks it up within a minute (or run `syncFromClubsNow` manually from the
 editor to skip the wait).
 
+## Cloud Logging / alerting
+
+This project is associated with the standard GCP project `speed-shuffle-usa`
+(Workspace-owned by Jim's org), not Apps Script's hidden default project —
+changed specifically so failures reach Cloud Logging/Monitoring instead of
+relying only on the in-sheet error log and a hand-rolled email cooldown
+(removed; see git history for `notifySystemFailure_`/`shouldSendAlertEmail_`
+if that context is ever needed again).
+
+- **`logSystemError_` (`ErrorLog.gs`) calls `console.error`**, which Cloud
+  Logging ingests under `resource.type="app_script_function"`. `Logger.log`
+  calls elsewhere do not reach Cloud Logging at all — see "Outstanding risks"
+  below.
+- **Alerting policy "Registration Sync Errors"**
+  (`projects/speed-shuffle-usa/alertPolicies/14038953390881675978`) is a
+  log-based alert (`conditionMatchedLog`, not a metric-threshold condition —
+  metric-threshold conditions don't support notification rate limiting) on
+  the filter `resource.type="app_script_function" AND severity=ERROR`,
+  rate-limited to one notification per open incident per hour.
+- **Notification channels**: individual email addresses (not a Google Group
+  — `tech@illinoisshuffleboard.org` was tried first but never received
+  Cloud Monitoring's verification email, likely a Group posting/moderation
+  restriction; left in the policy unverified in case that gets fixed later).
+  Manage channels/policy from the GCP console (Monitoring → Alerting) on the
+  `speed-shuffle-usa` project, or via `gcloud alpha monitoring channels`/
+  `gcloud alpha monitoring policies` (the `sendVerificationCode`/`verify`
+  channel-verification calls aren't wrapped by `gcloud` and need a raw
+  `curl` against the Monitoring API).
+- **Log-based metric `registration_sync_errors`** (same filter as the alert)
+  also exists, for potential dashboarding — it's not wired into the alert
+  policy itself.
+- **OAuth consent screen is Internal audience** (available because the GCP
+  project is Workspace-owned) — only accounts in that Workspace can
+  authorize/run functions in the Apps Script editor; anyone with just Drive
+  edit access to the script can still read/edit code and view logs, but
+  can't personally click "Run" and complete a fresh OAuth consent.
+
 ## Outstanding risks
 
 Locking, error-logging, and header-name column resolution (this revision)
@@ -260,22 +301,21 @@ close the worst correctness and silent-failure gaps, but the underlying
 architecture still has real limits worth knowing about rather than
 discovering during the tournament:
 
-- **Cloud Logging (Stackdriver) only ever sees uncaught exceptions, not the
-  project's own `Logger.log` calls.** `appsscript.json`'s
-  `"exceptionLogging": "STACKDRIVER"` forwards crashes there, but everything
-  this codebase deliberately logs (`Logger.log` in `syncFromClubsNow_`,
-  `console.log` in `verifySystem`) only reaches the Apps Script editor's own
-  per-execution transcript, not Cloud Logging. That's usually fine — the
-  `System Errors` sheet is this project's real, intentional durable log for
-  application-level failures — but it means a platform-level failure that
-  never reaches the script's own code (a hard execution-timeout kill, for
-  instance) can *only* show up in Cloud Logging, nowhere else. If richer
-  Cloud Logging ever becomes worth having (e.g. breadcrumbs before a crash),
-  it needs `console.log`/`console.error` specifically, not `Logger.log`.
+- **`Logger.log` still never reaches Cloud Logging — only `console.*` does.**
+  This project is associated with the `speed-shuffle-usa` GCP project (moved
+  off Apps Script's hidden default project specifically for this), and
+  `logSystemError_` calls `console.error` for exactly that reason. But
+  `Logger.log` calls elsewhere (e.g. in `syncFromClubsNow_`) and `console.log`
+  in `verifySystem` still only reach the Apps Script editor's own
+  per-execution transcript, not Cloud Logging — if something there ever needs
+  to be alertable, it needs to become a `console.error`/`console.warn` too,
+  the same way `logSystemError_` did.
 - **No true webhook retry.** As above: Apps Script Web Apps can't return a
   non-200 status, so Tito can never know an ingest failed and cannot retry it
-  for us. The `System Errors` sheet and `INGEST_ALERT_EMAIL` turn "silently
-  lost" into "visible, but still requires a human to replay it by hand."
+  for us. The `System Errors` sheet and the Cloud Monitoring alerting policy
+  ("Registration Sync Errors," see "Cloud Logging / alerting" below) turn
+  "silently lost" into "visible, but still requires a human to replay it by
+  hand."
 - **Column reordering/renaming is handled; a genuinely malformed sheet still
   needs a human.** `resolveColumns_` makes ingest/sync tolerant of columns
   being reordered or extra columns being added, and turns a missing/duplicate
@@ -298,8 +338,9 @@ discovering during the tournament:
   identity is similarly tied to one account. If that account loses access, is
   suspended, or Apps Script's daily quotas are hit, the entire write path
   (both Tito ingest and club→master sync) stops with no external monitoring
-  — only the in-sheet error log and (if configured) email alert, which
-  themselves depend on the same account being able to run code at all.
+  — only the in-sheet error log and the Cloud Monitoring alert, which
+  themselves depend on the same account being able to run code at all (if
+  the script can't execute, it can't log an error to alert on either).
 - **A schema change (new/renamed required header) needs Manager-role access
   to actually apply, not just Content Manager.** `applyProtections_`
   deliberately protects the entire header row and every identity/total/
@@ -376,10 +417,9 @@ A few things worth knowing before using it:
   deployed right now — which may not match this repo's mirror if anyone has
   edited live in the browser since the last manual copy. That diff needs a
   careful manual look once, before anyone runs `clasp:push` for real.
-- **Script Properties (`REGISTRATION_INGEST_TOKEN`, `INGEST_ALERT_EMAIL`) are
-  not part of the pushed/pulled files** — they're a separate per-project
-  key/value store, so clasp syncing source code can't accidentally leak or
-  overwrite them.
+- **Script Properties (`REGISTRATION_INGEST_TOKEN`) are not part of the
+  pushed/pulled files** — they're a separate per-project key/value store, so
+  clasp syncing source code can't accidentally leak or overwrite them.
 - **`.claspignore`** in this directory allowlists `appsscript.json` and
   `*.gs` only, so `clasp push` never tries to upload this `README.md` (or
   anything else non-script) as project source.
