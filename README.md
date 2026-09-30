@@ -103,6 +103,24 @@ Copy an existing hide_publicly checkbox into new rows, or enter TRUE/FALSE.
 The sheet currently contains six explicitly synthetic players, five completed and
 one registered. These are Google Sheet records, not bundled frontend mock arrays.
 
+## Sessions tab layout
+
+A separate `Sessions` tab, in the same spreadsheet, holds each club's own upcoming
+session dates for the club directory. One header row; column order may change,
+headers must remain unique. Required column names:
+
+- `club`: `chicago`, `brooklyn`, `st-pete`, `tampa`, or `beachside`.
+- `date`: ISO `YYYY-MM-DD`.
+- `start_time` / `end_time`: 24h `HH:mm`. `end_time` must be after `start_time`.
+
+Optional: `note`. A row with a blank `club` cell is skipped, so a blank template
+row at the bottom of the tab is fine. Each club can add, remove, or reorder their
+own rows freely; there is no matching/de-duplication key like `registration_id`,
+since sessions are just schedule data, not player records.
+
+`SHEETS_SESSIONS_RANGE` / `SHEETS_SESSIONS_GID` point at this tab, reusing the same
+`SHEETS_SPREADSHEET_ID` and `SHEETS_ACCESS` mode as the `Players` tab (see above).
+
 ## Runtime behavior and privacy
 
 Google Sheets is the intended operational/admin source of truth. The project
@@ -110,6 +128,7 @@ intentionally does not use a standalone database.
 
 ```text
 Master Google Sheet -> leaderboard-data Netlify Function -> static Astro page
+Sessions tab        -> sessions-data Netlify Function   -> static Astro page
 ```
 
 The browser reads `/.netlify/functions/leaderboard-data` on load, every 30 seconds
@@ -119,6 +138,13 @@ show explicitly and clear old standings instead of falling back to fake results.
 The endpoint returns a no-store response, public display fields, rank and club counts.
 It rejects invalid headers, duplicate IDs, unknown clubs, invalid statuses and missing
 completed totals rather than publishing misleading partial results.
+
+The club directory's "Upcoming sessions" reads `/.netlify/functions/sessions-data`
+once per page load — session dates don't change during a live tournament the way
+scores do, so there's no 30-second poll. A club with no upcoming sessions shows
+"None scheduled yet"; a failed read shows an explicit error, never stale or fake
+dates. The endpoint rejects invalid headers, unknown clubs, malformed dates/times,
+and an end time at or before its start time.
 
 Totals are ranked descending with competition ties (1, 2, 2, 4). This is a documented
 initial rule; Nick/Lauren must finalize tied payouts before launch. Club standings
@@ -151,9 +177,12 @@ Google Sheet afterward.
 
 `npm test` covers ties, registration/completion/cancellation counts, opt-outs,
 score reveal, zero/negative totals, duplicate IDs, malformed rows, safe errors, and
-sheet-link validation. The Google connection was also tested against the configured
-shared test sheet. Browser verification changed a test end score, observed rankings
-update, and restored the original value. Production build includes TypeScript checks.
+sheet-link validation. It also covers the Sessions tab: chronological sorting,
+skipped blank rows, and rejection of unknown clubs, malformed dates/times, and a
+non-positive session duration. The Google connection was also tested against the
+configured shared test sheet. Browser verification changed a test end score, observed
+rankings update, and restored the original value. Production build includes
+TypeScript checks.
 
 ## Existing repository patterns inspected
 

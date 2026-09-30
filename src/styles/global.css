@@ -453,6 +453,8 @@ button { font: inherit; }
 .sessions-empty { border: 1px dashed var(--line); border-radius: var(--radius-small); padding: 12px; font-size: 0.82rem; color: var(--muted); }
 .sessions-empty-title { font-weight: 700; color: var(--ink); margin: 0 0 2px; }
 .sessions-complete { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+.sessions-loading { font-size: 0.82rem; color: var(--muted); }
+.sessions-error { font-size: 0.82rem; color: var(--muted); }
 .sessions-toggle { margin-top: 8px; background: none; border: none; padding: 0; color: var(--accent-strong); font-weight: 700; font-size: 0.8rem; cursor: pointer; }
 .sessions-updated { margin-top: 10px; font-size: 0.72rem; color: var(--muted); }
 

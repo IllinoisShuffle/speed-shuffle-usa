@@ -42,3 +42,13 @@ export interface ClubStats {
   registered: number;
   completed: number;
 }
+
+export interface Session {
+  clubId: ClubId;
+  /** ISO date, e.g. "2026-10-07". */
+  date: string;
+  /** 24h "HH:mm". */
+  startTime: string;
+  endTime: string;
+  note?: string;
+}

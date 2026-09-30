@@ -1,8 +1,6 @@
 ---
 import { clubsById, organizerNames, organizerLogos, organizerWebsites } from '../lib/clubs';
 import { clubContacts } from '../data/clubContacts';
-import { sessions as allSessions, sessionsUpdatedAt } from '../data/sessions';
-import { formatSessionDate, formatSessionTime, isUpcoming } from '../lib/format';
 import { tournamentConfig } from '../lib/config';
 import type { ClubStats } from '../lib/types';
 
@@ -11,12 +9,6 @@ const { stats } = Astro.props;
 const club = clubsById[stats.clubId];
 const contact = clubContacts[club.id];
 const isFinal = tournamentConfig.stage === 'final';
-
-const upcoming = allSessions
-  .filter(session => session.clubId === club.id && isUpcoming(session.date))
-  .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
-const preview = upcoming.slice(0, 3);
-const overflow = upcoming.slice(3);
 ---
 <li class="directory-row" data-club-card={club.id} style={`--club-color:${club.accentColor}`}>
   <div class:list={['directory-logo-panel', `pattern-${club.panelPattern}`]} style={`background:${club.logoPanelBg}; --stripe-color:${club.stripeColor}`}>
@@ -44,25 +36,18 @@ const overflow = upcoming.slice(3);
       <p class="directory-label">Upcoming sessions</p>
       {isFinal ? (
         <p class="sessions-complete">All sessions complete</p>
-      ) : upcoming.length === 0 ? (
-        <div class="sessions-empty">
-          <p class="sessions-empty-title">None scheduled yet</p>
-          <p>Sessions will appear here as soon as the club posts them.</p>
-        </div>
       ) : (
         <>
-          <ul class="sessions-list" data-sessions-preview>
-            {preview.map(session => <li>{formatSessionDate(session.date)} <span class="session-time">{formatSessionTime(session.startTime, session.endTime)}</span></li>)}
-          </ul>
-          {overflow.length > 0 && (
-            <>
-              <ul class="sessions-list" data-sessions-overflow hidden>
-                {overflow.map(session => <li>{formatSessionDate(session.date)} <span class="session-time">{formatSessionTime(session.startTime, session.endTime)}</span></li>)}
-              </ul>
-              <button type="button" class="sessions-toggle" data-sessions-toggle aria-expanded="false">See all {upcoming.length} sessions</button>
-            </>
-          )}
-          {sessionsUpdatedAt && <p class="sessions-updated">Updated {formatSessionDate(sessionsUpdatedAt)}</p>}
+          <p class="sessions-loading" data-sessions-loading>Loading sessions…</p>
+          <div class="sessions-empty" data-sessions-empty hidden>
+            <p class="sessions-empty-title">None scheduled yet</p>
+            <p>Sessions will appear here as soon as the club posts them.</p>
+          </div>
+          <p class="sessions-error" data-sessions-error hidden>Couldn't load sessions. Try refreshing.</p>
+          <ul class="sessions-list" data-sessions-preview hidden></ul>
+          <ul class="sessions-list" data-sessions-overflow hidden></ul>
+          <button type="button" class="sessions-toggle" data-sessions-toggle aria-expanded="false" hidden>See all sessions</button>
+          <p class="sessions-updated" data-sessions-updated hidden></p>
         </>
       )}
     </div>
@@ -83,6 +68,9 @@ const overflow = upcoming.slice(3);
 </li>
 
 <script>
+  import { formatSessionDate, formatSessionTime, isUpcoming } from '../lib/format';
+  import type { Session } from '../lib/types';
+
   document.querySelectorAll<HTMLButtonElement>('[data-sessions-toggle]').forEach(button => {
     button.addEventListener('click', () => {
       const row = button.closest('.directory-row')!;
@@ -94,4 +82,63 @@ const overflow = upcoming.slice(3);
       button.textContent = open ? 'Show fewer' : `See all ${total} sessions`;
     });
   });
+
+  function sessionItem(session: Session): HTMLLIElement {
+    const li = document.createElement('li');
+    li.append(document.createTextNode(`${formatSessionDate(session.date)} `));
+    const time = document.createElement('span');
+    time.className = 'session-time';
+    time.textContent = formatSessionTime(session.startTime, session.endTime);
+    li.append(time);
+    return li;
+  }
+
+  function renderSessions(sessions: Session[], updatedAt: string) {
+    document.querySelectorAll<HTMLElement>('[data-club-card]').forEach(row => {
+      const loading = row.querySelector<HTMLElement>('[data-sessions-loading]');
+      if (!loading) return; // final stage: this row has no dynamic sessions UI
+      const clubId = row.getAttribute('data-club-card');
+      const upcoming = sessions
+        .filter(session => session.clubId === clubId && isUpcoming(session.date))
+        .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
+      const preview = upcoming.slice(0, 3);
+      const overflow = upcoming.slice(3);
+
+      loading.hidden = true;
+      const previewList = row.querySelector<HTMLUListElement>('[data-sessions-preview]')!;
+      const overflowList = row.querySelector<HTMLUListElement>('[data-sessions-overflow]')!;
+      const toggle = row.querySelector<HTMLButtonElement>('[data-sessions-toggle]')!;
+      const updated = row.querySelector<HTMLElement>('[data-sessions-updated]')!;
+
+      if (upcoming.length === 0) {
+        row.querySelector<HTMLElement>('[data-sessions-empty]')!.hidden = false;
+        return;
+      }
+      previewList.replaceChildren(...preview.map(sessionItem));
+      previewList.hidden = false;
+      if (overflow.length > 0) {
+        overflowList.replaceChildren(...overflow.map(sessionItem));
+        toggle.hidden = false;
+        toggle.textContent = `See all ${upcoming.length} sessions`;
+      }
+      updated.textContent = `Updated ${formatSessionDate(updatedAt.slice(0, 10))}`;
+      updated.hidden = false;
+    });
+  }
+
+  function showSessionsErrors() {
+    document.querySelectorAll<HTMLElement>('[data-sessions-loading]').forEach(loading => {
+      loading.hidden = true;
+      const error = loading.closest('.directory-sessions')?.querySelector<HTMLElement>('[data-sessions-error]');
+      if (error) error.hidden = false;
+    });
+  }
+
+  fetch('/.netlify/functions/sessions-data', { cache: 'no-store', signal: AbortSignal.timeout(15000) })
+    .then(response => {
+      if (!response.ok) throw new Error('Sessions request failed.');
+      return response.json();
+    })
+    .then((data: { sessions: Session[]; updatedAt: string }) => renderSessions(data.sessions, data.updatedAt))
+    .catch(() => showSessionsErrors());
 </script>
