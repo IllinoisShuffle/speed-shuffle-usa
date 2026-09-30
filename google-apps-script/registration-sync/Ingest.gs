@@ -388,10 +388,9 @@ function mapTitoPayloadToRegistration_(
 /*
  * Apps Script Web Apps always answer HTTP 200, regardless of what
  * doPost returns — there is no way to make Tito's own webhook retry
- * trigger on failure. logSystemError_ / notifySystemFailure_ (in
- * ErrorLog.gs) are the substitute: a durable, human-visible record of
- * any registration that failed to apply, so it can be replayed by
- * hand.
+ * trigger on failure. logSystemError_ (in ErrorLog.gs) is the
+ * substitute: a durable, human-visible record of any registration
+ * that failed to apply, so it can be replayed by hand.
  */
 function doPost(e) {
   var contents =
@@ -447,12 +446,6 @@ function doPost(e) {
 
   } catch (err) {
     logSystemError_(
-      'tito_ingest',
-      contents,
-      err
-    );
-
-    notifySystemFailure_(
       'tito_ingest',
       contents,
       err

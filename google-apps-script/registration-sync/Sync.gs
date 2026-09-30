@@ -52,12 +52,6 @@ function syncFromClubsNow() {
       '',
       err
     );
-
-    notifySystemFailure_(
-      'club_sync',
-      '',
-      err
-    );
   } finally {
     lock.releaseLock();
   }
@@ -144,12 +138,6 @@ function syncFromClubsNow_() {
       );
 
       logSystemError_(
-        'club_sync:' + club.id,
-        '',
-        err
-      );
-
-      notifySystemFailure_(
         'club_sync:' + club.id,
         '',
         err
@@ -364,15 +352,6 @@ function syncFromClubsNow_() {
      * way every other sync/ingest problem is surfaced.
      */
     logSystemError_(
-      'club_sync:unmatched_ids',
-      '',
-      new Error(
-        'Club row(s) with no matching MASTER registration_id: ' +
-        missing.join(', ')
-      )
-    );
-
-    notifySystemFailure_(
       'club_sync:unmatched_ids',
       '',
       new Error(
