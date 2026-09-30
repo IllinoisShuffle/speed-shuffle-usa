@@ -89,7 +89,7 @@ test('addRegistration preserves an existing Master hide_publicly but defaults ne
 });
 
 test('syncFromClubsNow_ isolates one club with broken headers, still syncs the healthy ones', () => {
-  const { fns, seedMaster, seedClub, clubSheet, systemErrors } = loadRegistrationSync();
+  const { fns, seedMaster, seedClub, clubSheet, failedWebhooks, logs } = loadRegistrationSync();
   ALL_CLUBS.forEach((id) => seedClub(id));
   const master = seedMaster();
   const cols = fns.resolveColumns_(master);
@@ -110,11 +110,13 @@ test('syncFromClubsNow_ isolates one club with broken headers, still syncs the h
 
   assert.equal(master.getRange(2, cols.STATUS).getValue(), 'completed');
   assert.equal(master.getRange(3, cols.STATUS).getValue(), 'registered'); // chicago skipped, untouched
-  assert.equal(systemErrors()!.getRange(2, 2).getValue(), 'club_sync:chicago');
+  // club_sync* failures are Cloud Logging only -- no payload worth a sheet row
+  assert.equal(failedWebhooks(), null);
+  assert.match(logs.join('\n'), /\[club_sync:chicago\]/);
 });
 
 test('syncFromClubsNow_ surfaces a club row with no matching MASTER registration_id', () => {
-  const { fns, seedMaster, seedClub, clubSheet, systemErrors } = loadRegistrationSync();
+  const { fns, seedMaster, seedClub, clubSheet, failedWebhooks, logs } = loadRegistrationSync();
   ALL_CLUBS.forEach((id) => seedClub(id));
   const master = seedMaster();
   const cols = fns.resolveColumns_(master);
@@ -124,8 +126,11 @@ test('syncFromClubsNow_ surfaces a club row with no matching MASTER registration
   brooklyn.getRange(2, cols.STATUS).setValue('registered');
 
   fns.syncFromClubsNow_();
-  assert.equal(systemErrors()!.getRange(2, 2).getValue(), 'club_sync:unmatched_ids');
-  assert.match(String(systemErrors()!.getRange(2, 3).getValue()), /ghost-id/);
+  // club_sync* failures are Cloud Logging only -- no payload worth a sheet row
+  assert.equal(failedWebhooks(), null);
+  const summary = logs.join('\n');
+  assert.match(summary, /\[club_sync:unmatched_ids\]/);
+  assert.match(summary, /ghost-id/);
 });
 
 test('syncFromClubsNow_ never reads or writes hide_publicly, in either direction', () => {
@@ -150,15 +155,15 @@ test('syncFromClubsNow_ never reads or writes hide_publicly, in either direction
   assert.equal(master.getRange(2, cols.HIDE).getValue(), true);
 });
 
-test('doPost rejects a bad token without writing System Errors, accepts a valid ticket', () => {
-  const { fns, properties, seedMaster, seedClub, systemErrors } = loadRegistrationSync();
+test('doPost rejects a bad token without writing Failed Webhooks, accepts a valid ticket', () => {
+  const { fns, properties, seedMaster, seedClub, failedWebhooks } = loadRegistrationSync();
   seedMaster();
   seedClub('chicago');
   properties.set('REGISTRATION_INGEST_TOKEN', 'secret');
 
   const bad = JSON.parse(fns.doPost({ parameter: { token: 'wrong' }, postData: { contents: '{}' } }).getContent());
   assert.equal(bad.error, 'Unauthorized');
-  assert.equal(systemErrors(), null);
+  assert.equal(failedWebhooks(), null);
 
   const payload = { _type: 'ticket', slug: 'tito-1', first_name: 'Nick', last_name: 'H', release_slug: 'chicago', updated_at: '2026-09-01T00:00:00Z' };
   const good = JSON.parse(fns.doPost({ parameter: { token: 'secret' }, postData: { contents: JSON.stringify(payload) } }).getContent());
@@ -166,8 +171,8 @@ test('doPost rejects a bad token without writing System Errors, accepts a valid 
   assert.equal(good.result.club, 'chicago');
 });
 
-test('doPost logs an authenticated failure to System Errors and to Cloud Logging via console.error', () => {
-  const { fns, properties, seedMaster, seedClub, systemErrors, logs } = loadRegistrationSync();
+test('doPost logs an authenticated failure to Failed Webhooks and to Cloud Logging via console.error', () => {
+  const { fns, properties, seedMaster, seedClub, failedWebhooks, logs } = loadRegistrationSync();
   seedMaster();
   seedClub('chicago');
   properties.set('REGISTRATION_INGEST_TOKEN', 'secret');
@@ -177,12 +182,12 @@ test('doPost logs an authenticated failure to System Errors and to Cloud Logging
   assert.equal(res.ok, false);
   assert.match(res.error, /Could not map Tito release to club/);
 
-  assert.equal(systemErrors()!.getRange(2, 2).getValue(), 'tito_ingest');
+  assert.equal(failedWebhooks()!.getRange(2, 2).getValue(), 'tito_ingest');
   assert.match(logs.join('\n'), /\[tito_ingest\].*Could not map Tito release to club/);
 });
 
-test('repeated failures of the same source each get their own System Errors row and console.error entry -- no in-script throttling', () => {
-  const { fns, properties, seedMaster, seedClub, systemErrors, logs } = loadRegistrationSync();
+test('repeated failures of the same source each get their own Failed Webhooks row and console.error entry -- no in-script throttling', () => {
+  const { fns, properties, seedMaster, seedClub, failedWebhooks, logs } = loadRegistrationSync();
   seedMaster();
   seedClub('chicago');
   properties.set('REGISTRATION_INGEST_TOKEN', 'secret');
@@ -192,7 +197,7 @@ test('repeated failures of the same source each get their own System Errors row 
   fns.doPost(req);
   fns.doPost(req); // same source ('tito_ingest') -- throttling now lives in the GCP alerting policy, not the script
 
-  assert.equal(systemErrors()!.getLastRow(), 3); // header + two logged failures
+  assert.equal(failedWebhooks()!.getLastRow(), 3); // header + two logged failures
   assert.equal(logs.filter((l) => l.includes('[tito_ingest]')).length, 2);
 });
 

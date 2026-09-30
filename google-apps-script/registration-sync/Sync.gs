@@ -439,10 +439,10 @@ function installSyncTrigger() {
  * syncFromClubsNow() checks it first and returns immediately, before
  * even acquiring the lock. This works regardless of who originally
  * installed the trigger (see deleteOwnSyncTriggers_ above for why that
- * matters) -- e.g. to stop System Errors from filling up with the same
- * failure every run while a header/schema mismatch is being fixed by
- * hand. Does not touch MASTER/club sheet data or the Tito webhook (a
- * separate, deployment-pinned concern).
+ * matters) -- e.g. to stop Cloud Logging (and the GCP alert) from
+ * filling up with the same failure every run while a header/schema
+ * mismatch is being fixed by hand. Does not touch MASTER/club sheet
+ * data or the Tito webhook (a separate, deployment-pinned concern).
  *
  * Re-run "Install Automatic Sync (One-Time Setup)" from this same menu
  * to resume -- it clears this property in addition to reinstalling the

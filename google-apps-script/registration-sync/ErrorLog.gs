@@ -1,29 +1,30 @@
 /**
- * The "System Errors" sheet, plus a console.error that Cloud Logging
- * picks up for the GCP alerting policy. Apps Script Web Apps always
- * answer HTTP 200 to doPost regardless of what the handler returns,
- * so Tito can never detect an ingest failure and retry it.
- * logSystemError_ is the substitute: a durable, human-visible record
- * of any registration or sync attempt that failed, so it can be
- * noticed and replayed by hand. Used by both Ingest.gs (doPost) and
- * Sync.gs (syncFromClubsNow), sharing one sheet and distinguished by
- * the `source` column.
+ * console.error → Cloud Logging (the GCP alerting policy reads this,
+ * every source) plus the "Failed Webhooks" sheet (tito_ingest only —
+ * the one source that carries a payload worth replaying by hand).
+ * Apps Script Web Apps always answer HTTP 200 to doPost regardless of
+ * what the handler returns, so Tito can never detect an ingest
+ * failure and retry it; the sheet row is the substitute, a durable
+ * record of the failed ticket JSON so it can be noticed and replayed.
+ * club_sync* failures (Sync.gs) never carried a payload here in the
+ * first place, so they're Cloud Logging only — nothing lost by
+ * skipping the sheet for them.
  */
 
-function ensureSystemErrorSheet_() {
+function ensureFailedWebhooksSheet_() {
   var ss =
     SpreadsheetApp
       .getActiveSpreadsheet();
 
   var sheet =
     ss.getSheetByName(
-      SYSTEM_ERROR_SHEET
+      FAILED_WEBHOOKS_SHEET
     );
 
   if (!sheet) {
     sheet =
       ss.insertSheet(
-        SYSTEM_ERROR_SHEET
+        FAILED_WEBHOOKS_SHEET
       );
 
     sheet
@@ -51,7 +52,8 @@ function logSystemError_(
   err
 ) {
   // console.error (not Logger.log) is what Cloud Logging actually
-  // ingests now that this project is on a standard GCP project.
+  // ingests now that this project is on a standard GCP project. Every
+  // source goes here, so the tech team's GCP alert sees all of them.
   console.error(
     '[' +
     source +
@@ -62,8 +64,15 @@ function logSystemError_(
     )
   );
 
+  // Only tito_ingest carries a payload worth preserving for a manual
+  // replay -- club_sync* failures are config/data problems on the
+  // sheet itself, not something you replay from a saved payload.
+  if (source !== 'tito_ingest') {
+    return;
+  }
+
   try {
-    ensureSystemErrorSheet_()
+    ensureFailedWebhooksSheet_()
       .appendRow([
         new Date(),
         source,

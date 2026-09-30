@@ -20,7 +20,7 @@ this has no effect on behavior, locking, or Script Properties:
 | `Repair.gs` | Sheet formatting/protection setup — the "Repair All Sheets" menu item. |
 | `Sync.gs` | Club → Master sync and its 10-minute time trigger. |
 | `Ingest.gs` | The Tito webhook (`doPost`) and registration upsert. |
-| `ErrorLog.gs` | The `System Errors` sheet, plus a `console.error` that Cloud Logging picks up for the GCP alerting policy — shared by `Sync.gs` and `Ingest.gs`. |
+| `ErrorLog.gs` | `console.error` → Cloud Logging for every failure (shared by `Sync.gs` and `Ingest.gs`), plus the `Failed Webhooks` sheet for `tito_ingest` specifically. |
 | `Admin.gs` | The custom menu and the manual `TEST_*`/`verifySystem`/`FIX_*` helpers. |
 
 When mirroring a change from the live editor back into this repo (or vice
@@ -57,8 +57,9 @@ files listed above):
    trigger someone else installed is invisible (and undeletable) to everyone
    else, even with full edit access (see "Outstanding risks" below). The
    property is project-wide, so pausing works regardless of who installed
-   it. Use it to stop `System Errors` filling up with the same failure every
-   run while a header/schema mismatch is being fixed by hand; re-running
+   it. Use it to stop Cloud Logging (and the GCP alert) filling up with the
+   same failure every run while a header/schema mismatch is being fixed by
+   hand; re-running
    **Install Automatic Sync** resumes it (clears the property and
    reinstalls/re-owns the trigger).
 3. **Tito registration ingest** (`doPost`, `mapTitoPayloadToRegistration_`,
@@ -88,8 +89,9 @@ As a result:
 - **Renaming, deleting, or duplicating a required header is not silently
   tolerated — it fails loudly instead.** `resolveColumns_` throws a specific
   "missing header X" / "duplicate header X" error naming the sheet, which
-  flows into the same failure path described below (logged to `System Errors`
-  and Cloud Logging) rather than writing to the wrong column.
+  flows into the same failure path described below (always logged to Cloud
+  Logging; also a `Failed Webhooks` sheet row if it happened on the Tito
+  ingest path) rather than writing to the wrong column.
 - **`prepareAllSheets` (the repair tool) is stricter on purpose**: it requires
   the canonical A:M order exactly (`assertCanonicalColumnOrder_`) and refuses
   to touch a sheet that's missing a header or already out of canonical order,
@@ -137,19 +139,21 @@ cover.
   `doPost`, no matter what the handler returns — there is no way to make
   Tito's own webhook delivery retry on failure. Instead, any error while
   processing an *authenticated* request (bad club mapping, broken headers,
-  sheet full, etc.) is appended to a `System Errors` sheet tab in the ADMIN
-  workbook (timestamp, source, error, raw payload) via `logSystemError_`,
-  which also emits a `console.error` picked up by Cloud Logging (this project
-  is associated with the `speed-shuffle-usa` GCP project, not Apps Script's
-  hidden default one — see "Cloud Logging / alerting" below). The same sheet
-  and helpers are also used by `syncFromClubsNow` (see below), distinguished
-  by the `source` column (`tito_ingest` vs
-  `club_sync`/`club_sync:<club id>`/`club_sync:unmatched_ids`). A failed
-  registration must be noticed and replayed by hand (e.g. re-running
-  `addRegistration` with the logged payload, or asking Tito to resend the
-  event) — nothing retries it automatically. Unauthorized requests (bad/missing
-  token) are neither logged to the sheet nor to Cloud Logging, to avoid
-  filling both with scanner noise from the public webhook URL.
+  sheet full, etc.) goes through `logSystemError_`, which **always** emits a
+  `console.error` picked up by Cloud Logging (this project is associated with
+  the `speed-shuffle-usa` GCP project, not Apps Script's hidden default one —
+  see "Cloud Logging / alerting" below), and **additionally** appends a row
+  (timestamp, source, error, raw payload) to the `Failed Webhooks` sheet tab
+  in the ADMIN workbook, but only when `source` is `tito_ingest` — that's the
+  one case with an actual payload worth replaying by hand. `syncFromClubsNow`
+  (see below) uses the same `logSystemError_` under `source:
+  club_sync`/`club_sync:<club id>`/`club_sync:unmatched_ids`, but those never
+  carried a payload in the first place, so they go to Cloud Logging only, not
+  the sheet. A failed registration must be noticed and replayed by hand (e.g.
+  re-running `addRegistration` with the logged payload, or asking Tito to
+  resend the event) — nothing retries it automatically. Unauthorized requests
+  (bad/missing token) are logged nowhere — neither sheet nor Cloud Logging —
+  to avoid filling both with scanner noise from the public webhook URL.
 - **Alerting is throttled on the GCP side, not in the script.** A Cloud
   Monitoring alerting policy ("Registration Sync Errors") fires on any
   `severity=ERROR` log entry from this project and emails the configured
@@ -159,8 +163,8 @@ cover.
   cooldown (`notifySystemFailure_`/`shouldSendAlertEmail_`, removed) that
   tracked a per-source last-sent timestamp in Script Properties; that
   throttling now lives entirely in the alerting policy's config, not in code.
-  The `System Errors` sheet itself is never throttled either way — every
-  occurrence still gets its own row.
+  The `Failed Webhooks` sheet itself is never throttled either way — every
+  `tito_ingest` occurrence still gets its own row.
 - **A broken club doesn't take down the others.** If one club sheet's headers
   are broken, `syncFromClubsNow` logs it (`club_sync:<club id>`) and skips
   just that club, continuing the sync for the remaining four. If MASTER's own
@@ -168,17 +172,17 @@ cover.
   there's nothing useful it can do without a working MASTER sheet.
 - **A lock timeout is now caught too.** `syncFromClubsNow`'s `waitLock` call
   used to sit outside its own try/catch, so a lock-contention timeout would
-  escape uncaught with no `System Errors` row and no email — only Apps
-  Script's own opaque default trigger-failure notice. It's now inside the try,
-  so it's logged/emailed under `source: club_sync` like any other sync
-  failure.
+  escape uncaught with no logging or alert at all — only Apps Script's own
+  opaque default trigger-failure notice. It's now inside the try, so it's
+  logged to Cloud Logging and alertable under `source: club_sync` like any
+  other sync failure.
 - **Unmatched club→MASTER registration IDs are now surfaced, not just
   logged.** A club-sheet row whose `registration_id` has no matching MASTER
   row (typo, a row MASTER never got, a manual club-sheet entry) used to only
   show up in `Logger.log` output — visible solely in the Apps Script execution
   transcript, which nobody checks routinely. It's real data drift, not a
-  transient error, so it now also goes to `System Errors` and Cloud Logging
-  on every sync run where it's still unresolved, under `source:
+  transient error, so it now also goes to Cloud Logging on every sync run
+  where it's still unresolved, under `source:
   club_sync:unmatched_ids` — subject to the same alert-policy rate limit as
   any other error, so it's not a fresh notification every minute the issue
   persists.
@@ -220,7 +224,7 @@ and clean up the row afterward.
    — `hide_publicly` is never touched by this path at all, in either
    direction).
 5. **Failure path** — confirm the unknown-club case from step 4 also appended
-   a row to the `System Errors` sheet tab in the ADMIN workbook (create it
+   a row to the `Failed Webhooks` sheet tab in the ADMIN workbook (create it
    first if this is the first failure ever recorded; `source` should read
    `tito_ingest`), and check Cloud Logging (Logs Explorer, project
    `speed-shuffle-usa`, `resource.type="app_script_function" AND
@@ -266,10 +270,15 @@ relying only on the in-sheet error log and a hand-rolled email cooldown
 (removed; see git history for `notifySystemFailure_`/`shouldSendAlertEmail_`
 if that context is ever needed again).
 
-- **`logSystemError_` (`ErrorLog.gs`) calls `console.error`**, which Cloud
-  Logging ingests under `resource.type="app_script_function"`. `Logger.log`
-  calls elsewhere do not reach Cloud Logging at all — see "Outstanding risks"
-  below.
+- **`logSystemError_` (`ErrorLog.gs`) calls `console.error` for every
+  source**, which Cloud Logging ingests under
+  `resource.type="app_script_function"` — this is what the tech team's alert
+  reads from, regardless of whether the failure was a Tito ingest or a club
+  sync. `Logger.log` calls elsewhere do not reach Cloud Logging at all — see
+  "Outstanding risks" below. Only `source: tito_ingest` also gets a row in
+  the `Failed Webhooks` sheet (it's the one source with a payload worth
+  replaying by hand); `club_sync`/`club_sync:<id>`/`club_sync:unmatched_ids`
+  are Cloud Logging only.
 - **Alerting policy "Registration Sync Errors"**
   (`projects/speed-shuffle-usa/alertPolicies/14038953390881675978`) is a
   log-based alert (`conditionMatchedLog`, not a metric-threshold condition —
@@ -312,7 +321,7 @@ discovering during the tournament:
   the same way `logSystemError_` did.
 - **No true webhook retry.** As above: Apps Script Web Apps can't return a
   non-200 status, so Tito can never know an ingest failed and cannot retry it
-  for us. The `System Errors` sheet and the Cloud Monitoring alerting policy
+  for us. The `Failed Webhooks` sheet and the Cloud Monitoring alerting policy
   ("Registration Sync Errors," see "Cloud Logging / alerting" below) turn
   "silently lost" into "visible, but still requires a human to replay it by
   hand."
@@ -354,8 +363,8 @@ discovering during the tournament:
   updated the live sheets means every ingest/sync call fails starting
   immediately once `clasp push` lands it on HEAD — this happened for real
   with the `last_name`/`email` change. **Pause Automatic Sync** (Sync.gs)
-  stops the resulting `System Errors` spam without needing that access
-  tier; fixing the headers still does.
+  stops the resulting Cloud Logging/alert spam from `syncFromClubsNow`
+  without needing that access tier; fixing the headers still does.
 - **`ScriptApp.getProjectTriggers()` only sees triggers owned by the
   currently executing account.** Discovered when Pause Automatic Sync's
   first version (trigger deletion only) reported "no trigger installed"
