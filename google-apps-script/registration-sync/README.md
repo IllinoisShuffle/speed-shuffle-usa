@@ -3,11 +3,13 @@
 This is a mirror of the container-bound Apps Script project attached to the
 **`ADMIN - Speed Shuffle Score Tracker`** Google Sheet (the master sheet, in the
 `Score Tracking` Drive folder). It lives in Google Drive/Apps Script, not in Netlify
-— it is not deployed by this repo's build or CI. The `.gs` files here are kept as
-the source of truth for review and history; **edits must still be made in the
-Apps Script editor** (Sheet → Extensions → Apps Script) and copied back here,
-since Apps Script has no native git integration in this setup (see "Should we
-use clasp?" below for a way to close that gap).
+— it is not part of this repo's own site build. But CI does keep it in sync:
+`.github/workflows/clasp-push.yml` pushes this directory to the live project's
+HEAD on every push to `main` that touches these files, so the `.gs` files here
+are git's source of truth going forward — no manual copy-paste into the Apps
+Script editor needed for a change made here. See "Using clasp" below for how
+that works, and for the one direction it doesn't cover (an edit made directly
+in the live editor still needs a manual `clasp:pull` to come back here).
 
 The project is split into several files, purely for readability — Apps Script
 merges every file in a project into one shared global scope at runtime, so
@@ -24,10 +26,10 @@ this has no effect on behavior, locking, or Script Properties:
 | `ErrorLog.gs` | `console.error` → Cloud Logging for every failure (shared by `Sync.gs` and `Ingest.gs`), plus the `Failed Webhooks` sheet for `tito_ingest` specifically. |
 | `Admin.gs` | The custom menu and the manual `TEST_*`/`verifySystem`/`FIX_*` helpers. |
 
-When mirroring a change from the live editor back into this repo (or vice
-versa), copy **all** files that changed — a partial copy across this many
-files is the main new risk this split introduces; see "Should we use clasp?"
-for how to avoid that risk entirely.
+`clasp push`/`clasp pull` (see "Using clasp" below) always sync the whole
+directory in one command, so a multi-file change never risks a partial copy
+across files the way manually copy-pasting between the editor and this repo
+used to.
 
 This supersedes the "Tito is not implemented" / "`tito-webhook` is still future
 work" notes elsewhere in this repo's docs — the Tito webhook exists, just outside
@@ -423,14 +425,13 @@ discovering during the tournament:
   `getProjectTriggers()` directly, including `verifySystem`'s trigger-count
   check: it can report zero (or the wrong count) if the real trigger
   belongs to a different account than whoever runs `verifySystem`.
-- **Docs/code drift.** The `.gs` files in this repo are a manually maintained
-  mirror of what's actually deployed in the Apps Script editor. Nothing
-  enforces that future edits made live in the editor get copied back here —
-  treat these files as documentation of the last-known state, and diff them
-  against the live project before trusting them fully. Splitting into
-  multiple files (this revision) makes this a little easier to get partially
-  wrong, since a change can touch several files at once — see "Should we use
-  clasp?" below for the actual fix.
+- **Docs/code drift, in one direction only.** `clasp-push.yml` (see "Using
+  clasp" below) keeps the live project's HEAD current with this repo on every
+  merge to `main`, so repo → live drift for a change made here is no longer a
+  manual step. The remaining risk runs the other way: an edit made directly in
+  the Apps Script editor (bypassing this repo) has no automatic path back —
+  someone has to notice and run `clasp:pull` themselves, or that live-only
+  change is silently overwritten the next time CI pushes.
 - **The `TEST_*` functions are still manual, run-by-hand checks in the
   Apps Script editor** — see "Automated tests" below for what now runs in
   CI instead, and why those functions specifically were left out of it.
