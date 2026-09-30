@@ -20,11 +20,23 @@
  * column "actually is"; nothing else should assume a fixed letter.
  */
 function resolveColumns_(sheet) {
+  return resolveColumnsFor_(sheet, HEADER_ORDER, HEADER_KEYS);
+}
+
+
+/*
+ * Same as resolveColumns_(), generalized to any header list — used for
+ * the Sessions sheets (SESSIONS_HEADER_ORDER/SESSIONS_HEADER_KEYS),
+ * which have their own, unrelated schema. resolveColumns_() is just
+ * this called with the registration project's own HEADER_ORDER/
+ * HEADER_KEYS, so every existing caller is unaffected.
+ */
+function resolveColumnsFor_(sheet, headerOrder, headerKeys) {
   var lastColumn =
     sheet.getLastColumn();
 
-  if (lastColumn < HEADER_ORDER.length) {
-    lastColumn = HEADER_ORDER.length;
+  if (lastColumn < headerOrder.length) {
+    lastColumn = headerOrder.length;
   }
 
   var headerRow =
@@ -72,8 +84,8 @@ function resolveColumns_(sheet) {
   var cols = {};
   var missing = [];
 
-  HEADER_ORDER.forEach(function(name, i) {
-    var key = HEADER_KEYS[i];
+  headerOrder.forEach(function(name, i) {
+    var key = headerKeys[i];
 
     if (
       indexByName.hasOwnProperty(name)

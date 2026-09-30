@@ -8,7 +8,7 @@ const SCRIPT_DIR = path.join(import.meta.dirname, '..', 'google-apps-script', 'r
 // registration-sync/README.md) to prove, like the PR #2 harness did, that
 // the 7-file split has no load-order dependency -- Apps Script merges every
 // file into one shared global scope regardless of order.
-const FILES = ['Repair.gs', 'Admin.gs', 'Sync.gs', 'Ingest.gs', 'ErrorLog.gs', 'Columns.gs', 'Config.gs'];
+const FILES = ['Repair.gs', 'Admin.gs', 'Sessions.gs', 'Sync.gs', 'Ingest.gs', 'ErrorLog.gs', 'Columns.gs', 'Config.gs'];
 
 type CellValue = string | number | boolean;
 
@@ -38,6 +38,10 @@ class FakeRange {
     return this;
   }
   setFormula(f: string) { this.sheet.setCell(this.row, this.col, f); return this; }
+  clearContent() {
+    for (let r = 0; r < this.numRows; r++) for (let c = 0; c < this.numCols; c++) this.sheet.data.delete(this.sheet.key(this.row + r, this.col + c));
+    return this;
+  }
 }
 
 class FakeSheet {
@@ -92,6 +96,7 @@ type RegistrationSyncApi = {
   CLUB_DATA_SHEET: string;
   FAILED_WEBHOOKS_SHEET: string;
   resolveColumns_(sheet: FakeSheet): Cols;
+  resolveColumnsFor_(sheet: FakeSheet, headerOrder: string[], headerKeys: string[]): Record<string, number>;
   assertCanonicalColumnOrder_(sheet: FakeSheet): Cols;
   getClubById_(id: string): Club | null;
   ensureMasterSheet_(): FakeSheet;
@@ -99,6 +104,10 @@ type RegistrationSyncApi = {
   addRegistration(registration: Registration): { registration_id: string; club: string; master_row: number; club_row: number };
   syncFromClubsNow_(): void;
   syncFromClubsNow(): void;
+  syncSessionsFromClubs_(): { written: number; skippedClubs: string[] };
+  SESSIONS_SHEET: string;
+  SESSIONS_HEADER_ORDER: string[];
+  SESSIONS_HEADER_KEYS: string[];
   installSyncTrigger(): void;
   pauseSyncTrigger(): void;
   verifySystem(): void;
@@ -197,5 +206,25 @@ export function loadRegistrationSync() {
 
   const failedWebhooks = (): FakeSheet | null => admin.getSheetByName(fns.FAILED_WEBHOOKS_SHEET);
 
-  return { fns, admin, mail, properties, logs, triggers, seedMaster, seedClub, clubSheet, failedWebhooks };
+  const seedMasterSessions = (headers?: string[]): FakeSheet => {
+    const sheet = admin.sheet(fns.SESSIONS_SHEET);
+    sheet.setHeaders(headers ?? fns.SESSIONS_HEADER_ORDER);
+    return sheet;
+  };
+
+  const seedClubSessions = (clubId: string, headers?: string[]): FakeSheet => {
+    const club = fns.getClubById_(clubId)!;
+    const ss = (sandbox.SpreadsheetApp as { openById(id: string): FakeSpreadsheet }).openById(club.workbookId);
+    const sheet = ss.sheet(fns.SESSIONS_SHEET);
+    sheet.setHeaders(headers ?? fns.SESSIONS_HEADER_ORDER);
+    return sheet;
+  };
+
+  const masterSessionsSheet = (): FakeSheet | null => admin.getSheetByName(fns.SESSIONS_SHEET);
+
+  return {
+    fns, admin, mail, properties, logs, triggers,
+    seedMaster, seedClub, clubSheet, failedWebhooks,
+    seedMasterSessions, seedClubSessions, masterSessionsSheet,
+  };
 }

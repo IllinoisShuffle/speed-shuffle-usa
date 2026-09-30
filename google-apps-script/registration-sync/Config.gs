@@ -13,6 +13,8 @@
  *   Columns.gs  - header-name column resolution
  *   Repair.gs   - sheet formatting/protection setup ("Repair All Sheets")
  *   Sync.gs     - club -> master sync + its time trigger
+ *   Sessions.gs - club -> master SESSIONS sync (run as part of the same
+ *                 trigger as Sync.gs, see below)
  *   Ingest.gs   - Tito webhook (doPost) + registration upsert
  *   ErrorLog.gs - the "Failed Webhooks" sheet (tito_ingest only) +
  *                 console.error for Cloud Logging (every source)
@@ -80,6 +82,24 @@
  * - Lauren checks hide_publicly to hide one specific completed player
  * - nothing ever re-checks or un-checks it automatically, so there is
  *   no "future syncs force it back" case to guard against
+ *
+ * SESSIONS SHEET (separate tab, SESSIONS_HEADER_ORDER below):
+ * club | date | start_time | end_time | note
+ *
+ * Each club keeps a "Sessions" tab in their own workbook, alongside
+ * their Players tab — the same reason Players is per-club instead of
+ * one shared MASTER tab: club managers must never need edit (or even
+ * read) access to the ADMIN/MASTER spreadsheet. Sessions.gs mirrors
+ * every club's Sessions tab into a "Sessions" tab in the ADMIN
+ * workbook, as a second phase of the same 10-minute sync as scores.
+ * Unlike the score sync, there is no per-row identity to match on
+ * (no registration_id equivalent), so MASTER's Sessions tab is fully
+ * rebuilt from the current contents of all five club tabs on every
+ * run, rather than merged — deleting a row on a club's own sheet
+ * removes it from MASTER on the next sync, which is the correct
+ * behavior for a schedule (unlike scores, which are never deleted).
+ * The public site (netlify/lib/sessions.ts) only ever reads MASTER's
+ * Sessions tab, same as it only reads MASTER for standings.
  */
 
 
@@ -153,6 +173,24 @@ var HEADER_KEYS = [
   'HIDE',
   'REG_ID',
   'EMAIL'
+];
+
+var SESSIONS_SHEET = 'Sessions';
+
+var SESSIONS_HEADER_ORDER = [
+  'club',
+  'date',
+  'start_time',
+  'end_time',
+  'note'
+];
+
+var SESSIONS_HEADER_KEYS = [
+  'CLUB',
+  'DATE',
+  'START',
+  'END',
+  'NOTE'
 ];
 
 var CLUBS = [

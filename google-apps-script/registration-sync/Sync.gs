@@ -11,6 +11,10 @@
  * LockService.getScriptLock() with addRegistration() in Ingest.gs so a
  * Tito webhook landing mid-sync can't interleave and corrupt a row.
  *
+ * syncFromClubsNow_() also runs the Sessions sync (Sessions.gs) as a
+ * second phase, under the same lock/trigger — see that file for why
+ * it works differently (full rebuild, not matched/merged).
+ *
  * MASTER reads/writes are batched per club, one call per sync-owned
  * column (STATUS, E1-E4), instead of one getValue/setValue pair per
  * matched row. Each column is read fresh right before a club's rows
@@ -330,6 +334,24 @@ function syncFromClubsNow_() {
       )
       .setValues(masterE4);
   });
+
+  /*
+   * Second phase of the same 10-minute sync: mirror every club's own
+   * Sessions tab into MASTER's Sessions tab. Fully independent of the
+   * score sync above (different sheets, different schema, no shared
+   * identity key) — isolated in its own try/catch so a broken or
+   * missing Sessions tab never rolls back or blocks the score sync
+   * that already completed above. See Sessions.gs.
+   */
+  try {
+    syncSessionsFromClubs_();
+  } catch (err) {
+    logSystemError_(
+      'session_sync',
+      '',
+      err
+    );
+  }
 
   SpreadsheetApp.flush();
 
