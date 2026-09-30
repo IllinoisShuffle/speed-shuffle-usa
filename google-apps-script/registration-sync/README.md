@@ -75,16 +75,20 @@ files listed above):
    its own `Sessions` tab (`club`, `date`, `start_time`, `end_time`, `note`) in
    their own workbook, next to their `Players` tab — never a shared tab in the
    ADMIN workbook, for the same access-isolation reason `Players` is per-club.
-   Unlike the score sync, there's no `registration_id`-equivalent identity to
-   match rows on, so MASTER's `Sessions` tab isn't merged — it's fully rebuilt
-   from the current contents of all five club `Sessions` tabs on every run. A
-   row a club deletes from their own tab disappears from MASTER on the next
-   sync (the correct behavior for a schedule, unlike scores, which are never
-   deleted). The public site (`netlify/lib/sessions.ts`) only ever reads
-   MASTER's `Sessions` tab, the same way it only reads MASTER for standings.
-   One club's missing tab or broken headers is isolated and logged
-   (`session_sync:<club id>`) without blocking the other four or the score
-   sync; a broken MASTER `Sessions` tab logs once under `session_sync`.
+   A missing tab (in any of the 6 workbooks) is auto-created with its header
+   row — no manual setup required — the same way `ensureFailedWebhooksSheet_`
+   already does for `Failed Webhooks`. Unlike the score sync, there's no
+   `registration_id`-equivalent identity to match rows on, so MASTER's
+   `Sessions` tab isn't merged — it's fully rebuilt from the current contents
+   of all five club `Sessions` tabs on every run. A row a club deletes from
+   their own tab disappears from MASTER on the next sync (the correct behavior
+   for a schedule, unlike scores, which are never deleted). The public site
+   (`netlify/lib/sessions.ts`) only ever reads MASTER's `Sessions` tab, the
+   same way it only reads MASTER for standings. A tab that already exists but
+   has a missing/renamed/duplicated required header (real data drift, not a
+   missing tab) is isolated and logged (`session_sync:<club id>`) without
+   blocking the other four or the score sync; the same on MASTER logs once
+   under `session_sync`.
 
 ## Column resolution
 

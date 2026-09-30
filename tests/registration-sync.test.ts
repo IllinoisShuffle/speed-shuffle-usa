@@ -197,7 +197,24 @@ test("syncSessionsFromClubs_ always uses the club's own configured id, never tru
   assert.equal(masterSessionsSheet()!.getRange(2, cols.CLUB).getValue(), 'brooklyn');
 });
 
-test('syncSessionsFromClubs_ isolates a club with a missing tab or broken headers, still syncs the others', () => {
+test('syncSessionsFromClubs_ auto-creates a missing club or MASTER Sessions tab instead of failing', () => {
+  const { fns, seedClubSessions, masterSessionsSheet, logs } = loadRegistrationSync();
+  // Nothing seeded at all -- MASTER and every club's Sessions tab is missing.
+  const brooklyn0 = seedClubSessions('brooklyn'); // one club already has a tab, to prove both paths coexist
+  const cols = fns.resolveColumnsFor_(brooklyn0, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
+  brooklyn0.getRange(2, cols.DATE).setValue('2026-10-09');
+  brooklyn0.getRange(2, cols.START).setValue('19:30');
+  brooklyn0.getRange(2, cols.END).setValue('21:00');
+
+  const result = fns.syncSessionsFromClubs_();
+  assert.equal(result.written, 1); // only brooklyn had a real row; the rest auto-created empty
+  assert.equal(result.skippedClubs.length, 0);
+  assert.equal(logs.length, 0); // no errors -- auto-create is silent, not a failure path
+
+  assert.deepEqual(masterSessionsSheet()!.getRange(1, 1, 1, 5).getValues()[0], [...fns.SESSIONS_HEADER_ORDER]);
+});
+
+test('syncSessionsFromClubs_ isolates a club with broken headers on an already-existing tab, still syncs the others', () => {
   const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet, logs } = loadRegistrationSync();
   seedMasterSessions();
   const cols = fns.resolveColumnsFor_(masterSessionsSheet()!, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
@@ -208,14 +225,18 @@ test('syncSessionsFromClubs_ isolates a club with a missing tab or broken header
   brooklyn.getRange(2, cols.END).setValue('21:00');
 
   seedClubSessions('chicago', fns.SESSIONS_HEADER_ORDER.map((h) => (h === 'date' ? 'date_typo' : h)));
-  // beachside, st-pete, tampa: no Sessions tab created at all yet
+  // beachside, st-pete, tampa: no Sessions tab yet -- auto-created, not skipped (see the test above)
 
   const result = fns.syncSessionsFromClubs_();
   assert.equal(result.written, 1);
-  assert.equal(result.skippedClubs.length, 4);
-  const summary = logs.join('\n');
-  assert.match(summary, /\[session_sync:chicago\]/);
-  assert.match(summary, /\[session_sync:beachside\]/);
+  assert.equal(result.skippedClubs.length, 1);
+  assert.match(logs.join('\n'), /\[session_sync:chicago\]/);
+});
+
+test('syncSessionsFromClubs_ throws on a MASTER Sessions tab that already exists with broken headers (real drift, not missing)', () => {
+  const { fns, seedMasterSessions } = loadRegistrationSync();
+  seedMasterSessions(fns.SESSIONS_HEADER_ORDER.map((h) => (h === 'date' ? 'date_typo' : h)));
+  assert.throws(() => fns.syncSessionsFromClubs_(), /missing required header.*date/i);
 });
 
 test('syncSessionsFromClubs_ fully rebuilds MASTER on every run -- a row removed from a club sheet disappears', () => {
@@ -234,14 +255,28 @@ test('syncSessionsFromClubs_ fully rebuilds MASTER on every run -- a row removed
   assert.equal(masterSessionsSheet()!.getRange(2, cols.DATE).getValue(), ''); // no stale leftover row
 });
 
-test('syncFromClubsNow_ runs the Sessions sync too, isolated from a broken MASTER Sessions tab', () => {
-  const { fns, seedMaster, seedClub, logs } = loadRegistrationSync();
+test('syncFromClubsNow_ runs the Sessions sync too, auto-creating MASTER Sessions with no prior setup', () => {
+  const { fns, seedMaster, seedClub, admin } = loadRegistrationSync();
   ALL_CLUBS.forEach((id) => seedClub(id));
   seedMaster();
-  // No MASTER Sessions tab at all -- ensureMasterSessionsSheet_ throws.
+  // No Sessions tab anywhere yet -- must not throw, must auto-create.
 
   assert.doesNotThrow(() => fns.syncFromClubsNow_());
-  assert.match(logs.join('\n'), /\[session_sync\] Sessions sheet not found in ADMIN workbook/);
+  assert.ok(admin.getSheetByName(fns.SESSIONS_SHEET));
+});
+
+test('syncFromClubsNow_ isolates a MASTER Sessions tab that already exists with broken headers, without touching the score sync', () => {
+  const { fns, seedMaster, seedClub, seedMasterSessions, logs } = loadRegistrationSync();
+  ALL_CLUBS.forEach((id) => seedClub(id));
+  const master = seedMaster();
+  const cols = fns.resolveColumns_(master);
+  master.getRange(2, cols.REG_ID).setValue('t-1');
+  master.getRange(2, cols.STATUS).setValue('registered');
+  seedMasterSessions(fns.SESSIONS_HEADER_ORDER.map((h) => (h === 'date' ? 'date_typo' : h)));
+
+  assert.doesNotThrow(() => fns.syncFromClubsNow_());
+  assert.equal(master.getRange(2, cols.STATUS).getValue(), 'registered'); // score sync unaffected
+  assert.match(logs.join('\n'), /\[session_sync\].*missing required header/i);
 });
 
 test('doPost rejects a bad token without writing Failed Webhooks, accepts a valid ticket', () => {

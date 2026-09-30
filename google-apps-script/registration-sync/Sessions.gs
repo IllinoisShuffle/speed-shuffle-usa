@@ -21,12 +21,15 @@
    ========================================================= */
 
 function syncSessionsFromClubs_() {
+  // Auto-creates the tab (with headers) if it doesn't exist yet -- no
+  // manual setup step.
   var master =
     ensureMasterSessionsSheet_();
 
   /*
-   * If MASTER's own Sessions headers are broken, nothing below can
-   * work — let this throw out to the caller (syncFromClubsNow_ in
+   * A tab that already exists but has a missing/renamed/duplicated
+   * required header is real data drift (not the auto-create case
+   * above) — let this throw out to the caller (syncFromClubsNow_ in
    * Sync.gs), which logs it once under source: session_sync.
    */
   var masterCols =
@@ -44,9 +47,12 @@ function syncSessionsFromClubs_() {
     var cols;
 
     /*
-     * One club's missing tab or broken headers should not take down
-     * the sync for the other four — skip it, log it, keep going. Same
-     * isolation as the score sync in Sync.gs.
+     * ensureClubSessionsSheet_ auto-creates a missing tab, so the only
+     * way this throws is real data drift on a tab that already exists
+     * (missing/renamed/duplicated required header). One club's broken
+     * headers should not take down the sync for the other four — skip
+     * it, log it, keep going. Same isolation as the score sync in
+     * Sync.gs.
      */
     try {
       sheet =
