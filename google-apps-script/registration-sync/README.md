@@ -140,7 +140,7 @@ cover.
   retried for hours (registrations still landed; Apps Script runs `doPost` to
   completion before issuing the redirect). The Netlify function forwards
   Tito's POST, including the `?token=` query param, to this script's Web App
-  URL (`TITO_WEBHOOK_TARGET_URL` in the Netlify site's environment — Apps
+  URL (`APPS_SCRIPT_INGEST_URL` in the Netlify site's environment — Apps
   Script editor → Deploy → Manage deployments for the current URL, since it
   can be redeployed; check the Apps Script project or ask Nick/John), and
   hands Tito back the real status/body. See `netlify/functions/README.md`.

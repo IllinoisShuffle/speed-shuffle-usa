@@ -17,7 +17,7 @@
  * upstream status/body straight to Tito.
  */
 
-const DEFAULT_TARGET_URL = process.env.TITO_WEBHOOK_TARGET_URL;
+const DEFAULT_TARGET_URL = process.env.APPS_SCRIPT_INGEST_URL;
 
 type NetlifyEvent = {
   httpMethod: string;
