@@ -20,6 +20,43 @@
    CLUB → MASTER SESSIONS SYNC
    ========================================================= */
 
+/*
+ * getRange().getValues() returns a native JS Date object for any cell
+ * Sheets recognizes as a date or time -- not the plain-text string the
+ * public site's parser (netlify/lib/sessions.ts) requires -- regardless
+ * of what the club typed or what the column's number format claims.
+ * Formatting these explicitly (rather than a bare String(value)) is
+ * what keeps a Date object from landing in MASTER as
+ * "Wed Oct 07 2026 00:00:00 GMT..." instead of "2026-10-07", or as a
+ * real date/time cell (instead of "18:00") for start/end times.
+ * Already-plain-text cells pass through String(...) unchanged.
+ */
+function formatSessionDateCell_(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(
+      value,
+      Session.getScriptTimeZone(),
+      'yyyy-MM-dd'
+    );
+  }
+
+  return String(value || '').trim();
+}
+
+
+function formatSessionTimeCell_(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(
+      value,
+      Session.getScriptTimeZone(),
+      'HH:mm'
+    );
+  }
+
+  return String(value || '').trim();
+}
+
+
 function syncSessionsFromClubs_() {
   // Auto-creates the tab (with headers) if it doesn't exist yet -- no
   // manual setup step.
@@ -115,9 +152,9 @@ function syncSessionsFromClubs_() {
 
     rows.forEach(function(row) {
       var date =
-        String(
-          row[cols.DATE - 1] || ''
-        ).trim();
+        formatSessionDateCell_(
+          row[cols.DATE - 1]
+        );
 
       if (!date) {
         return;
@@ -132,9 +169,9 @@ function syncSessionsFromClubs_() {
       combined.push({
         club: club.id,
         date: date,
-        start: row[cols.START - 1],
-        end: row[cols.END - 1],
-        note: row[cols.NOTE - 1]
+        start: formatSessionTimeCell_(row[cols.START - 1]),
+        end: formatSessionTimeCell_(row[cols.END - 1]),
+        note: String(row[cols.NOTE - 1] || '').trim()
       });
     });
   });

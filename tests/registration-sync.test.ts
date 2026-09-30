@@ -239,6 +239,40 @@ test('syncSessionsFromClubs_ throws on a MASTER Sessions tab that already exists
   assert.throws(() => fns.syncSessionsFromClubs_(), /missing required header.*date/i);
 });
 
+test('formatSessionDateCell_/formatSessionTimeCell_ normalize a real Sheets Date value, and pass plain text through unchanged', () => {
+  const { fns, sheetDate } = loadRegistrationSync();
+  // getValues() returns a native Date for any cell Sheets recognizes as a
+  // date/time, regardless of what the club typed or the column's number
+  // format -- 18:30 UTC is 11:30 America/Los_Angeles (the harness's
+  // mocked script timezone), same calendar date either way.
+  const cell = sheetDate(Date.UTC(2026, 9, 7, 18, 30, 0));
+  assert.equal(fns.formatSessionDateCell_(cell), '2026-10-07');
+  assert.equal(fns.formatSessionTimeCell_(cell), '11:30');
+
+  // Already-plain-text cells (the documented, correct entry format) must
+  // pass through unchanged.
+  assert.equal(fns.formatSessionDateCell_('2026-10-07'), '2026-10-07');
+  assert.equal(fns.formatSessionTimeCell_('18:00'), '18:00');
+  assert.equal(fns.formatSessionDateCell_(''), '');
+});
+
+test('syncSessionsFromClubs_ normalizes real Sheets Date/time cells instead of writing malformed values to MASTER', () => {
+  const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet, sheetDate } = loadRegistrationSync();
+  seedMasterSessions();
+  const cols = fns.resolveColumnsFor_(masterSessionsSheet()!, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
+
+  const brooklyn = seedClubSessions('brooklyn');
+  // Simulates a club typing a date into a cell Sheets auto-detected as a
+  // real date/time value (the bug this guards against), not plain text.
+  brooklyn.getRange(2, cols.DATE).setValue(sheetDate(Date.UTC(2026, 9, 7, 18, 30, 0)));
+  brooklyn.getRange(2, cols.START).setValue(sheetDate(Date.UTC(2026, 9, 7, 18, 30, 0)));
+  brooklyn.getRange(2, cols.END).setValue(sheetDate(Date.UTC(2026, 9, 7, 20, 30, 0)));
+
+  fns.syncSessionsFromClubs_();
+  const written = masterSessionsSheet()!.getRange(2, 1, 1, 4).getValues()[0];
+  assert.deepEqual(written, ['brooklyn', '2026-10-07', '11:30', '13:30']);
+});
+
 test('syncSessionsFromClubs_ fully rebuilds MASTER on every run -- a row removed from a club sheet disappears', () => {
   const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet } = loadRegistrationSync();
   seedMasterSessions();
