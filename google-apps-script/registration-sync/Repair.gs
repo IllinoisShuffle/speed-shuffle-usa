@@ -385,6 +385,14 @@ function protectRange_(
   range,
   description
 ) {
+  // Shared by every protected range (header, identity columns,
+  // total_score, registration_id, email, hide_publicly on club
+  // sheets) so they're all visually distinguishable as locked,
+  // consistently -- not just functionally protected.
+  range.setBackground(
+    PROTECTED_RANGE_BACKGROUND
+  );
+
   var protection =
     range
       .protect()

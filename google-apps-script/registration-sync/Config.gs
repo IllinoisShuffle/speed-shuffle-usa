@@ -99,6 +99,8 @@ var DATA_ROWS = LAST_DATA_ROW - 1; // rows 2:1000
 
 var LOCK_WAIT_MS = 30000;
 
+var PROTECTED_RANGE_BACKGROUND = '#f3f3f3';
+
 /*
  * Pause Automatic Sync (Sync.gs) sets this Script Property rather than
  * deleting the installed trigger -- ScriptApp.getProjectTriggers() only
