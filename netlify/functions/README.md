@@ -26,7 +26,7 @@ retries the same event for hours, risking Tito disabling the webhook, even
 though the registration already landed (Apps Script runs `doPost` to
 completion before issuing the redirect). This function forwards Tito's POST
 (body, and query string including the shared `token`) to
-`TITO_WEBHOOK_TARGET_URL`, lets `fetch` complete the redirect the way a
+`APPS_SCRIPT_INGEST_URL`, lets `fetch` complete the redirect the way a
 browser would, and returns the real upstream status/body to Tito. Non-POST
 requests return 405; a missing target URL returns 500; a failure reaching the
 Apps Script URL returns 502 without leaking the URL (it carries the shared
