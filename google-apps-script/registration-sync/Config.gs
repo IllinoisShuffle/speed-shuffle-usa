@@ -14,7 +14,8 @@
  *   Repair.gs   - sheet formatting/protection setup ("Repair All Sheets")
  *   Sync.gs     - club -> master sync + its time trigger
  *   Ingest.gs   - Tito webhook (doPost) + registration upsert
- *   ErrorLog.gs - the "System Errors" sheet + email alerting
+ *   ErrorLog.gs - the "Failed Webhooks" sheet (tito_ingest only) +
+ *                 console.error for Cloud Logging (every source)
  *
  * CANONICAL COLUMN ORDER (what prepareAllSheets() lays down
  * on a fresh or reset sheet):
@@ -54,8 +55,13 @@
  * A sheet whose columns have been reordered, or that has extra columns
  * added elsewhere, still works. A sheet that is missing one of the 13
  * names (typo, deletion, accidental overwrite) fails loudly — the
- * write is refused and logged to the "System Errors" sheet instead of
- * silently landing in the wrong column. prepareAllSheets() (menu item
+ * write is refused and always logged to Cloud Logging (console.error
+ * in logSystemError_, ErrorLog.gs) instead of silently landing in the
+ * wrong column. A Tito ingest failure (source: tito_ingest) also gets
+ * a row in the "Failed Webhooks" sheet, since it carries a payload
+ * worth replaying by hand; a club/master sync failure (source:
+ * club_sync*) never had a payload to preserve there in the first
+ * place, so it's Cloud Logging only. prepareAllSheets() (menu item
  * "Repair All Sheets") is stricter: it requires the canonical A:M
  * order exactly, and stops with an alert rather than reformatting a
  * sheet that's out of order.
@@ -85,7 +91,7 @@ var SS_MENU = 'Speed Shuffle';
 
 var MASTER_SHEET = 'MASTER';
 var CLUB_DATA_SHEET = 'Players';
-var SYSTEM_ERROR_SHEET = 'System Errors';
+var FAILED_WEBHOOKS_SHEET = 'Failed Webhooks';
 
 var PREFORMAT_ROWS = 1000;
 var LAST_DATA_ROW = 1000;

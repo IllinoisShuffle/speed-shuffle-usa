@@ -90,7 +90,7 @@ type RegistrationSyncApi = {
   HEADER_ORDER: string[];
   MASTER_SHEET: string;
   CLUB_DATA_SHEET: string;
-  SYSTEM_ERROR_SHEET: string;
+  FAILED_WEBHOOKS_SHEET: string;
   resolveColumns_(sheet: FakeSheet): Cols;
   assertCanonicalColumnOrder_(sheet: FakeSheet): Cols;
   getClubById_(id: string): Club | null;
@@ -195,7 +195,7 @@ export function loadRegistrationSync() {
     return (sandbox.SpreadsheetApp as { openById(id: string): FakeSpreadsheet }).openById(club.workbookId).getSheetByName(fns.CLUB_DATA_SHEET)!;
   };
 
-  const systemErrors = (): FakeSheet | null => admin.getSheetByName(fns.SYSTEM_ERROR_SHEET);
+  const failedWebhooks = (): FakeSheet | null => admin.getSheetByName(fns.FAILED_WEBHOOKS_SHEET);
 
-  return { fns, admin, mail, properties, logs, triggers, seedMaster, seedClub, clubSheet, systemErrors };
+  return { fns, admin, mail, properties, logs, triggers, seedMaster, seedClub, clubSheet, failedWebhooks };
 }
