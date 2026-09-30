@@ -38,6 +38,11 @@ class FakeRange {
     return this;
   }
   setFormula(f: string) { this.sheet.setCell(this.row, this.col, f); return this; }
+  setNumberFormat(format: string) {
+    for (let r = 0; r < this.numRows; r++) for (let c = 0; c < this.numCols; c++) this.sheet.formats.set(this.sheet.key(this.row + r, this.col + c), format);
+    return this;
+  }
+  getNumberFormat(): string { return this.sheet.formats.get(this.sheet.key(this.row, this.col)) ?? 'General'; }
   clearContent() {
     for (let r = 0; r < this.numRows; r++) for (let c = 0; c < this.numCols; c++) this.sheet.data.delete(this.sheet.key(this.row + r, this.col + c));
     return this;
@@ -45,7 +50,7 @@ class FakeRange {
 }
 
 class FakeSheet {
-  name: string; parent: FakeSpreadsheet; data = new Map<string, CellValue>(); maxRows = 1000; maxCols = 26;
+  name: string; parent: FakeSpreadsheet; data = new Map<string, CellValue>(); formats = new Map<string, string>(); maxRows = 1000; maxCols = 26;
   constructor(name: string, parent: FakeSpreadsheet) { this.name = name; this.parent = parent; }
   key(r: number, c: number) { return r + ':' + c; }
   cell(r: number, c: number): CellValue { const k = this.key(r, c); return this.data.has(k) ? this.data.get(k)! : ''; }

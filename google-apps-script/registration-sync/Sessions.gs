@@ -217,6 +217,30 @@ function syncSessionsFromClubs_() {
   }
 
   if (combined.length) {
+    /*
+     * setValues() re-parses a plain string the same way typing it into
+     * the UI would -- "2026-10-01" or "18:00" gets silently converted
+     * into a real Date/time-of-day cell whenever the target column's
+     * number format is left on "Automatic" (true for a freshly
+     * auto-created tab). The public site reads this range with
+     * valueRenderOption: UNFORMATTED_VALUE (netlify/lib/sheets.ts),
+     * which returns the raw serial number for a cell like that instead
+     * of the string -- failing every format check even though the
+     * sheet displays a perfectly normal-looking date/time. Forcing
+     * Plain Text on these columns before writing keeps the values
+     * exactly as written, and self-heals any already-converted cell
+     * the moment this (fully-rebuilding) sync next runs.
+     */
+    master
+      .getRange(2, masterCols.DATE, combined.length, 1)
+      .setNumberFormat('@');
+    master
+      .getRange(2, masterCols.START, combined.length, 1)
+      .setNumberFormat('@');
+    master
+      .getRange(2, masterCols.END, combined.length, 1)
+      .setNumberFormat('@');
+
     master
       .getRange(
         2,
