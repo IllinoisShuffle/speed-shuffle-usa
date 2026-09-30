@@ -182,6 +182,33 @@ test('syncSessionsFromClubs_ rebuilds MASTER Sessions from every club, skipping 
   assert.deepEqual(written.find((row) => row[0] === 'brooklyn'), ['brooklyn', '2026-10-09', '19:30', '21:00', '']);
 });
 
+test('syncSessionsFromClubs_ forces MASTER date/start/end columns to Plain Text before writing, so Sheets never silently re-parses them back into real Date/time cells', () => {
+  // getValues() returning "2026-10-07"/"18:00" (asserted above) isn't
+  // enough proof on its own -- real Google Sheets re-parses a plain
+  // string the same way typing it into the UI would the moment
+  // setValues() lands on a column still left on "Automatic" format,
+  // silently turning it into a real Date/time-of-day cell. The public
+  // site then reads that cell with valueRenderOption: UNFORMATTED_VALUE
+  // (netlify/lib/sheets.ts), getting back a raw serial number instead
+  // of the string, and rejects it -- even though the sheet displays a
+  // perfectly normal-looking date/time. Only forcing Plain Text on
+  // these columns before every write actually prevents that.
+  const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet } = loadRegistrationSync();
+  seedMasterSessions();
+  const cols = fns.resolveColumnsFor_(masterSessionsSheet()!, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
+
+  const chicago = seedClubSessions('chicago');
+  chicago.getRange(2, cols.DATE).setValue('2026-10-07');
+  chicago.getRange(2, cols.START).setValue('18:00');
+  chicago.getRange(2, cols.END).setValue('20:00');
+
+  fns.syncSessionsFromClubs_();
+  const master = masterSessionsSheet()!;
+  assert.equal(master.getRange(2, cols.DATE).getNumberFormat(), '@');
+  assert.equal(master.getRange(2, cols.START).getNumberFormat(), '@');
+  assert.equal(master.getRange(2, cols.END).getNumberFormat(), '@');
+});
+
 test('syncSessionsFromClubs_ skips a row with a date but no start/end time yet, instead of writing it half-finished to MASTER', () => {
   // A club filling out its Sessions tab typically enters the date first,
   // before nailing down start/end time -- a normal in-progress editing
