@@ -173,11 +173,17 @@ Google environment variables in that site's function environment. Nothing has be
 pushed, linked, or deployed by this implementation.
 
 Tito registration ingest and club-sheet-to-master aggregation (scores and
-sessions) are implemented, but outside this repo: a Google Apps Script project
-bound to the ADMIN master sheet runs a `doPost` webhook that Tito calls on ticket
-events, plus a 10-minute club→master sync trigger that syncs both scores and
-session dates. See `google-apps-script/registration-sync/` for a mirrored copy of
-that source and how it works. Lauren can still create her own
+sessions) are implemented, but mostly outside this repo: a Google Apps Script
+project bound to the ADMIN master sheet runs a `doPost` webhook that Tito calls
+on ticket events, plus a 10-minute club→master sync trigger that syncs both
+scores and session dates. See `google-apps-script/registration-sync/` for a
+mirrored copy of that source and how it works. Tito's webhook is configured
+against this repo's `tito-webhook` Netlify function (see
+`netlify/functions/README.md`), not the Apps Script URL directly — Apps Script
+Web Apps always 302 to a second content URL before answering, which Tito's
+webhook sender doesn't handle, so it retried every event for hours even though
+the registration had already landed; the function fixes the redirect handling
+and hands Tito a clean response. Lauren can still create her own
 test sheets using the same layout; the application is not dependent on her sheet
 setup. Production Google permissions and final tie/payout rules remain separate
 work. Proctors still record on paper and enter four end scores in their own

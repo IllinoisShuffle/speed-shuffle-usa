@@ -130,10 +130,18 @@ cover.
 
 ## The Tito webhook contract
 
-- **Endpoint**: the Web App URL from this script's current deployment
-  (Apps Script editor → Deploy → Manage deployments). Not recorded here since it
-  can be redeployed; check the Apps Script project or ask Nick/John for the
-  current URL.
+- **Endpoint**: Tito's webhook is configured against this repo's `tito-webhook`
+  Netlify function (`netlify/functions/tito-webhook.ts`), **not** this script's
+  Web App URL directly. Apps Script Web Apps always 302 to a second, GET-only
+  content URL before delivering the real response — Tito's webhook sender
+  doesn't follow that correctly, so it saw every delivery as a failure and
+  retried for hours (registrations still landed; Apps Script runs `doPost` to
+  completion before issuing the redirect). The Netlify function forwards
+  Tito's POST, including the `?token=` query param, to this script's Web App
+  URL (`TITO_WEBHOOK_TARGET_URL` in the Netlify site's environment — Apps
+  Script editor → Deploy → Manage deployments for the current URL, since it
+  can be redeployed; check the Apps Script project or ask Nick/John), and
+  hands Tito back the real status/body. See `netlify/functions/README.md`.
 - **Auth**: a shared secret passed as a `token` query-string parameter on the
   POST URL (`assertIngestToken_`). The expected value is stored in the script's
   **Script Properties** as `REGISTRATION_INGEST_TOKEN` — it is not in this file
