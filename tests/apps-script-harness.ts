@@ -81,12 +81,21 @@ class FakeSheet {
 
 class FakeSpreadsheet {
   name: string; sheets = new Map<string, FakeSheet>();
+  // Defaults to the harness's own mocked Session.getScriptTimeZone() so
+  // every test that doesn't care about cross-workbook time zones still
+  // passes unchanged -- only a test that explicitly calls
+  // setSpreadsheetTimeZone() exercises a club workbook whose time zone
+  // differs from the ADMIN-bound script's, which is the real bug this
+  // harness needs to be able to reproduce.
+  timeZone = 'America/Los_Angeles';
   constructor(name: string) { this.name = name; }
   getName() { return this.name; }
   getSheetByName(name: string): FakeSheet | null { return this.sheets.has(name) ? this.sheets.get(name)! : null; }
   getSheets(): FakeSheet[] { return [...this.sheets.values()]; }
   insertSheet(name: string): FakeSheet { const s = new FakeSheet(name, this); this.sheets.set(name, s); return s; }
   sheet(name: string): FakeSheet { return this.sheets.has(name) ? this.sheets.get(name)! : this.insertSheet(name); }
+  getSpreadsheetTimeZone() { return this.timeZone; }
+  setSpreadsheetTimeZone(timeZone: string) { this.timeZone = timeZone; }
 }
 
 type Club = { id: string; label: string; workbookId: string };
@@ -110,8 +119,8 @@ type RegistrationSyncApi = {
   syncFromClubsNow_(): void;
   syncFromClubsNow(): void;
   syncSessionsFromClubs_(): { written: number; skippedClubs: string[] };
-  formatSessionDateCell_(value: unknown): string;
-  formatSessionTimeCell_(value: unknown): string;
+  formatSessionDateCell_(value: unknown, timeZone: string): string;
+  formatSessionTimeCell_(value: unknown, timeZone: string): string;
   SESSIONS_SHEET: string;
   SESSIONS_HEADER_ORDER: string[];
   SESSIONS_HEADER_KEYS: string[];
