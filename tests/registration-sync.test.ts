@@ -293,21 +293,26 @@ test('syncSessionsFromClubs_ throws on a MASTER Sessions tab that already exists
   assert.throws(() => fns.syncSessionsFromClubs_(), /missing required header.*date/i);
 });
 
-test('formatSessionDateCell_/formatSessionTimeCell_ normalize a real Sheets Date value, and pass plain text through unchanged', () => {
+test('formatSessionDateCell_/formatSessionTimeCell_ normalize a real Sheets Date value using the passed-in time zone, and pass plain text through unchanged', () => {
   const { fns, sheetDate } = loadRegistrationSync();
   // getValues() returns a native Date for any cell Sheets recognizes as a
   // date/time, regardless of what the club typed or the column's number
-  // format -- 18:30 UTC is 11:30 America/Los_Angeles (the harness's
-  // mocked script timezone), same calendar date either way.
+  // format -- 18:30 UTC is 11:30 America/Los_Angeles, same calendar date
+  // either way. The caller decides which time zone that is (always the
+  // SOURCE sheet's own workbook time zone, see syncSessionsFromClubs_ --
+  // these two functions never assume Session.getScriptTimeZone()).
   const cell = sheetDate(Date.UTC(2026, 9, 7, 18, 30, 0));
-  assert.equal(fns.formatSessionDateCell_(cell), '2026-10-07');
-  assert.equal(fns.formatSessionTimeCell_(cell), '11:30');
+  assert.equal(fns.formatSessionDateCell_(cell, 'America/Los_Angeles'), '2026-10-07');
+  assert.equal(fns.formatSessionTimeCell_(cell, 'America/Los_Angeles'), '11:30');
+  // Same instant, formatted for a different workbook time zone, lands on
+  // a different wall-clock time -- this is the whole bug.
+  assert.equal(fns.formatSessionTimeCell_(cell, 'America/New_York'), '14:30');
 
   // Already-plain-text cells (the documented, correct entry format) must
-  // pass through unchanged.
-  assert.equal(fns.formatSessionDateCell_('2026-10-07'), '2026-10-07');
-  assert.equal(fns.formatSessionTimeCell_('18:00'), '18:00');
-  assert.equal(fns.formatSessionDateCell_(''), '');
+  // pass through unchanged regardless of time zone.
+  assert.equal(fns.formatSessionDateCell_('2026-10-07', 'America/Los_Angeles'), '2026-10-07');
+  assert.equal(fns.formatSessionTimeCell_('18:00', 'America/Los_Angeles'), '18:00');
+  assert.equal(fns.formatSessionDateCell_('', 'America/Los_Angeles'), '');
 });
 
 test('syncSessionsFromClubs_ normalizes real Sheets Date/time cells instead of writing malformed values to MASTER', () => {
@@ -325,6 +330,29 @@ test('syncSessionsFromClubs_ normalizes real Sheets Date/time cells instead of w
   fns.syncSessionsFromClubs_();
   const written = masterSessionsSheet()!.getRange(2, 1, 1, 4).getValues()[0];
   assert.deepEqual(written, ['brooklyn', '2026-10-07', '11:30', '13:30']);
+});
+
+test("syncSessionsFromClubs_ formats a club's Date/time cells using that CLUB WORKBOOK's own time zone, not the ADMIN-bound script's", () => {
+  const { fns, seedMasterSessions, seedClubSessions, masterSessionsSheet, sheetDate } = loadRegistrationSync();
+  seedMasterSessions();
+  const cols = fns.resolveColumnsFor_(masterSessionsSheet()!, fns.SESSIONS_HEADER_ORDER, fns.SESSIONS_HEADER_KEYS);
+
+  // Brooklyn's own workbook (Config.gs, CLUBS) is a spreadsheet file
+  // entirely separate from ADMIN, with its own File > Settings time
+  // zone -- here set to Eastern, distinct from the harness's mocked
+  // Session.getScriptTimeZone() ('America/Los_Angeles'). Formatting with
+  // the script's time zone instead of this workbook's own is exactly the
+  // bug reported against the live Brooklyn sync: the written time is the
+  // same absolute instant shifted onto the wrong wall clock.
+  const brooklyn = seedClubSessions('brooklyn');
+  brooklyn.getParent().setSpreadsheetTimeZone('America/New_York');
+  brooklyn.getRange(2, cols.DATE).setValue(sheetDate(Date.UTC(2026, 9, 7, 18, 30, 0)));
+  brooklyn.getRange(2, cols.START).setValue(sheetDate(Date.UTC(2026, 9, 7, 18, 30, 0)));
+  brooklyn.getRange(2, cols.END).setValue(sheetDate(Date.UTC(2026, 9, 7, 20, 30, 0)));
+
+  fns.syncSessionsFromClubs_();
+  const written = masterSessionsSheet()!.getRange(2, 1, 1, 4).getValues()[0];
+  assert.deepEqual(written, ['brooklyn', '2026-10-07', '14:30', '16:30']);
 });
 
 test('syncSessionsFromClubs_ fully rebuilds MASTER on every run -- a row removed from a club sheet disappears', () => {

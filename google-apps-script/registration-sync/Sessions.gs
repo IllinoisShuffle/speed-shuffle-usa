@@ -30,12 +30,22 @@
  * "Wed Oct 07 2026 00:00:00 GMT..." instead of "2026-10-07", or as a
  * real date/time cell (instead of "18:00") for start/end times.
  * Already-plain-text cells pass through String(...) unchanged.
+ *
+ * The timeZone must be the time zone of the SPREADSHEET the Date came
+ * from (its own File > Settings time zone), not Session.getScriptTimeZone().
+ * Each club keeps its own workbook (Config.gs, CLUBS), so a cell read via
+ * SpreadsheetApp.openById(club.workbookId) was converted from its serial
+ * value into a Date using that workbook's own time zone -- reformatting
+ * it with the ADMIN-bound script's time zone instead silently shifts the
+ * clock time whenever a club's workbook time zone doesn't happen to match
+ * the script project's. Always pass sheet.getParent().getSpreadsheetTimeZone()
+ * for the sheet the value was actually read from.
  */
-function formatSessionDateCell_(value) {
+function formatSessionDateCell_(value, timeZone) {
   if (value instanceof Date) {
     return Utilities.formatDate(
       value,
-      Session.getScriptTimeZone(),
+      timeZone,
       'yyyy-MM-dd'
     );
   }
@@ -44,11 +54,11 @@ function formatSessionDateCell_(value) {
 }
 
 
-function formatSessionTimeCell_(value) {
+function formatSessionTimeCell_(value, timeZone) {
   if (value instanceof Date) {
     return Utilities.formatDate(
       value,
-      Session.getScriptTimeZone(),
+      timeZone,
       'HH:mm'
     );
   }
@@ -122,6 +132,16 @@ function syncSessionsFromClubs_() {
       return;
     }
 
+    /*
+     * The club's own workbook (Config.gs, CLUBS) has its own File >
+     * Settings time zone, independent of the ADMIN-bound script's --
+     * see the comment above formatSessionDateCell_/formatSessionTimeCell_
+     * for why that's the one that has to be used to format a Date read
+     * from this sheet.
+     */
+    var clubTimeZone =
+      sheet.getParent().getSpreadsheetTimeZone();
+
     var lastRow =
       Math.max(
         sheet.getLastRow(),
@@ -153,15 +173,18 @@ function syncSessionsFromClubs_() {
     rows.forEach(function(row) {
       var date =
         formatSessionDateCell_(
-          row[cols.DATE - 1]
+          row[cols.DATE - 1],
+          clubTimeZone
         );
       var start =
         formatSessionTimeCell_(
-          row[cols.START - 1]
+          row[cols.START - 1],
+          clubTimeZone
         );
       var end =
         formatSessionTimeCell_(
-          row[cols.END - 1]
+          row[cols.END - 1],
+          clubTimeZone
         );
 
       /*
