@@ -22,9 +22,10 @@ export const tournamentConfig = {
 export const registrationUrl = 'https://ti.to/ilsa/speedshuffle2026';
 export const tournamentContactEmail = 'USAspeed@illinoisshuffleboard.org';
 
-// Pending content (HANDOFF.md §12): real dates arrive before launch.
+// The competition runs October 1–31. `end` is the exclusive cutoff: midnight
+// Central at the close of October 31, the latest time zone among the clubs.
 export const tournamentDates = {
   boardOpensLabel: 'October 1',
-  start: null as string | null,
-  end: null as string | null,
+  start: '2026-10-01T00:00:00-04:00' as string | null,
+  end: '2026-11-01T00:00:00-05:00' as string | null,
 };
