@@ -11,7 +11,9 @@ const daysLeft = tournamentDates.end
 
 const subLine = {
   before: 'October 2026 · five clubs, one leaderboard',
-  during: daysLeft !== null ? `October 2026 · ${daysLeft} days left to shoot your entry` : 'October 2026 · dates confirmed soon',
+  during: daysLeft !== null
+    ? `October 2026 · ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left to shoot your entry`
+    : 'October 2026 · runs through October 31',
   final: 'October 2026 · five clubs, one leaderboard',
 }[stage];
 
@@ -45,7 +47,7 @@ const stats: HeroStat[] = {
   during: [
     { value: '—', label: 'Registered', live: 'registered' },
     { value: '—', label: 'Completed', live: 'completed' },
-    { value: daysLeft !== null ? String(daysLeft) : 'TBD', label: 'Days left' },
+    { value: daysLeft !== null ? String(daysLeft) : '—', label: 'Days left', live: 'days-left' },
     { value: 'Top 10', label: 'Players paid', accent: true },
   ],
   final: [
@@ -61,7 +63,7 @@ const stats: HeroStat[] = {
     <div class="hero-copy">
       <div class="hero-meta">
         <span class="badge badge--accent">{badge}</span>
-        <span class="hero-subline">{subLine}</span>
+        <span class="hero-subline" data-hero-subline>{subLine}</span>
       </div>
       <h1 class="hero-title skew">SPEED SHUFFLING<br /><span class="hero-title-accent">ACROSS THE USA</span></h1>
       <p class="hero-lead">
@@ -89,3 +91,15 @@ const stats: HeroStat[] = {
     </figure>
   </div>
 </section>
+
+{stage === 'during' && tournamentDates.end && (
+  <script is:inline define:vars={{ end: tournamentDates.end }}>
+    // The site is built statically, so refresh the countdown in the browser
+    // rather than trusting whatever day the last deploy happened on.
+    const daysLeft = Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86_400_000));
+    const stat = document.querySelector('[data-hero-stat="days-left"]');
+    if (stat) stat.textContent = String(daysLeft);
+    const subline = document.querySelector('[data-hero-subline]');
+    if (subline) subline.textContent = `October 2026 · ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left to shoot your entry`;
+  </script>
+)}
