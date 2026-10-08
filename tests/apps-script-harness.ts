@@ -128,6 +128,8 @@ type RegistrationSyncApi = {
   pauseSyncTrigger(): void;
   verifySystem(): void;
   doPost(e: { parameter?: Record<string, string>; postData?: { contents: string } }): { getContent(): string };
+  doGet(): { getContent(): string };
+  logSystemError_(source: string, rawContents: string, err: unknown): void;
 };
 
 // Loads the live registration-sync .gs source into a fresh sandboxed Apps
@@ -139,6 +141,9 @@ export function loadRegistrationSync() {
   const mail: { to: string; subject: string; body: string }[] = [];
   const properties = new Map<string, string>();
   const logs: string[] = [];
+  // Same messages as `logs`, tagged with the console method used -- the
+  // level decides whether Cloud Logging records ERROR (alerts) or not.
+  const consoleCalls: { level: 'log' | 'error' | 'warn' | 'info'; msg: string }[] = [];
   const triggers: { getHandlerFunction(): string }[] = [];
   const source = FILES.map((f) => fs.readFileSync(path.join(SCRIPT_DIR, f), 'utf8')).join('\n;\n');
 
@@ -185,12 +190,10 @@ export function loadRegistrationSync() {
     },
     MailApp: { sendEmail: (to: string, subject: string, body: string) => { mail.push({ to, subject, body }); } },
     Logger: { log: (msg: unknown) => { logs.push(String(msg)); } },
-    console: {
-      log: (msg: unknown) => { logs.push(String(msg)); },
-      error: (msg: unknown) => { logs.push(String(msg)); },
-      warn: (msg: unknown) => { logs.push(String(msg)); },
-      info: (msg: unknown) => { logs.push(String(msg)); },
-    },
+    console: Object.fromEntries((['log', 'error', 'warn', 'info'] as const).map((level) => [
+      level,
+      (msg: unknown) => { logs.push(String(msg)); consoleCalls.push({ level, msg: String(msg) }); },
+    ])),
     ScriptApp: {
       getProjectTriggers: () => [...triggers],
       newTrigger: (handlerFunction: string) => ({
@@ -260,7 +263,7 @@ export function loadRegistrationSync() {
   const masterSessionsSheet = (): FakeSheet | null => admin.getSheetByName(fns.SESSIONS_SHEET);
 
   return {
-    fns, admin, mail, properties, logs, triggers,
+    fns, admin, mail, properties, logs, consoleCalls, triggers,
     seedMaster, seedClub, clubSheet, failedWebhooks,
     seedMasterSessions, seedClubSessions, masterSessionsSheet,
     sheetDate,

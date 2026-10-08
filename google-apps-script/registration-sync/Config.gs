@@ -123,6 +123,16 @@ var DATA_ROWS = LAST_DATA_ROW - 1; // rows 2:1000
 var LOCK_WAIT_MS = 30000;
 
 /*
+ * Error messages logSystemError_ downgrades to WARNING (no alert) for
+ * the sync sources -- see isTransientSyncError_ in ErrorLog.gs.
+ */
+var TRANSIENT_SYNC_ERROR_PATTERNS = [
+  /Service \w+ timed out/i,
+  /a server error occurred/i,
+  /Lock timeout/i
+];
+
+/*
  * Pause Automatic Sync (Sync.gs) sets this Script Property rather than
  * deleting the installed trigger -- ScriptApp.getProjectTriggers() only
  * returns triggers created by the *currently executing user's own
