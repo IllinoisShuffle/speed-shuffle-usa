@@ -308,33 +308,52 @@ if that context is ever needed again).
   source**, which Cloud Logging ingests under
   `resource.type="app_script_function"` — this is what the tech team's alert
   reads from, regardless of whether the failure was a Tito ingest or a club
-  sync. `Logger.log` calls elsewhere do not reach Cloud Logging at all — see
-  "Outstanding risks" below. Only `source: tito_ingest` also gets a row in
-  the `Failed Webhooks` sheet (it's the one source with a payload worth
-  replaying by hand); `club_sync`/`club_sync:<id>`/`club_sync:unmatched_ids`
-  are Cloud Logging only.
-- **Two alerting policies, split by `resource.labels.function_name`** (both
-  log-based/`conditionMatchedLog`, not metric-threshold — metric-threshold
-  conditions don't support notification rate limiting, and Cloud Monitoring
-  actually *requires* a rate limit on log-based policies, so "no limit" isn't
-  an option either):
+  sync. The one exception: a *transient* sync failure (`club_sync*`/
+  `session_sync*` whose message matches `TRANSIENT_SYNC_ERROR_PATTERNS` in
+  `Config.gs` — "Service Drive timed out…", "a server error occurred",
+  lock timeouts) goes out via `console.warn` instead, so it's logged at
+  WARNING and alerts nobody; the next 10-minute sync run retries it anyway.
+  `tito_ingest` failures are never downgraded. Trade-off: a club workbook
+  that times out on *every* run would now be silent — check Logs Explorer
+  for repeated WARNINGs if a club's scores look stale. `Logger.log` calls
+  elsewhere do not reach Cloud Logging at all — see "Outstanding risks"
+  below. Only `source: tito_ingest` also gets a row in the `Failed Webhooks`
+  sheet (it's the one source with a payload worth replaying by hand);
+  `club_sync`/`club_sync:<id>`/`club_sync:unmatched_ids` are Cloud Logging
+  only.
+- **A successful Tito ingest logs one INFO line** (`[tito_ingest] ok
+  <registration_id> (<club>)`), so a Failed Webhooks row that later healed
+  itself (Tito sending the same ticket again — every write is an upsert on
+  `registration_id`) is visible in Cloud Logging instead of a guess.
+- **`doGet` exists only to answer stray GETs** (someone opening the ingest
+  URL in a browser, or a chat/email link preview of it). Without it Apps
+  Script logs `Script function not found: doGet` at ERROR, which used to
+  trip the Webhook / Other alert.
+- **Two alerting policies, split by the `[source]` prefix of the log
+  message** (both log-based/`conditionMatchedLog`, not metric-threshold —
+  metric-threshold conditions don't support notification rate limiting, and
+  Cloud Monitoring actually *requires* a rate limit on log-based policies,
+  so "no limit" isn't an option either). They were first split on
+  `resource.labels.function_name`, but Apps Script only fills that label in
+  for *uncaught* exceptions — every `console.*` line from `logSystemError_`
+  arrives as `function_name="unknown"`, so caught sync errors leaked into
+  the Webhook / Other policy. The sync policy also keeps a
+  `function_name="syncFromClubsNow"` clause for uncaught exceptions from
+  the sync trigger itself:
   - **"Registration Sync Errors -- Club Sync"**
     (`projects/speed-shuffle-usa/alertPolicies/14038953390881675978`), filter
-    `resource.type="app_script_function" AND
-    resource.labels.function_name="syncFromClubsNow" AND severity=ERROR`,
-    rate-limited to one notification per 30 minutes. `syncFromClubsNow` is
-    the only function that ever produces a `club_sync`/`club_sync:<id>`/
-    `club_sync:unmatched_ids` error (Apps Script attributes
-    `resource.labels.function_name` to the top-level invoked function, not
-    the innermost one that actually threw), and it runs on a recurring
-    10-minute trigger — a persistent failure would otherwise re-fire the
-    alert every cycle, hence the longer window.
+    `resource.type="app_script_function" AND severity=ERROR AND
+    (jsonPayload.message=~"^\\[(club_sync|session_sync)" OR
+    resource.labels.function_name="syncFromClubsNow")`, rate-limited to one
+    notification per 30 minutes. The sync runs on a recurring 10-minute
+    trigger — a persistent failure would otherwise re-fire the alert every
+    cycle, hence the longer window.
   - **"Registration Sync Errors -- Webhook / Other"**
     (`projects/speed-shuffle-usa/alertPolicies/1872205758743892680`), the
-    inverse filter (`function_name!="syncFromClubsNow"`), rate-limited to
-    one notification per 5 minutes — as tight as Cloud Monitoring allows.
-    Covers `tito_ingest` (the Tito webhook, `doPost`) plus any uncaught
-    exception from any other function (e.g. a stray `TEST_*` run). These are
+    exact inverse (`NOT (…same clause…)`), rate-limited to one notification
+    per 5 minutes — as tight as Cloud Monitoring allows. Covers
+    `tito_ingest` (the Tito webhook, `doPost`) plus any uncaught exception
+    from any other function (e.g. a stray `TEST_*` run). These are
     event-driven, not trigger-loop-driven, so there's no repeat-every-cycle
     risk to throttle harder against — the tech team should hear about nearly
     every one of these as it happens.

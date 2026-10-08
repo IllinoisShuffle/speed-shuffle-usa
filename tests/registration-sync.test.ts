@@ -441,6 +441,42 @@ test('repeated failures of the same source each get their own Failed Webhooks ro
   assert.equal(logs.filter((l) => l.includes('[tito_ingest]')).length, 2);
 });
 
+test('doPost logs a successful ingest at INFO so a healed Failed Webhooks row is traceable in Cloud Logging', () => {
+  const { fns, properties, seedMaster, seedClub, consoleCalls } = loadRegistrationSync();
+  seedMaster();
+  seedClub('chicago');
+  properties.set('REGISTRATION_INGEST_TOKEN', 'secret');
+
+  const payload = { _type: 'ticket', slug: 'tito-4', first_name: 'Nick', last_name: 'H', release_slug: 'chicago' };
+  fns.doPost({ parameter: { token: 'secret' }, postData: { contents: JSON.stringify(payload) } });
+
+  assert.deepEqual(consoleCalls, [{ level: 'info', msg: '[tito_ingest] ok tito-4 (chicago)' }]);
+});
+
+test('doGet answers a browser/link-preview GET instead of Apps Script logging "Script function not found" at ERROR', () => {
+  const { fns, consoleCalls } = loadRegistrationSync();
+  assert.equal(JSON.parse(fns.doGet().getContent()).ok, true);
+  assert.equal(consoleCalls.length, 0);
+});
+
+test('logSystemError_ downgrades transient sync failures to WARNING but keeps real ones, and every tito_ingest failure, at ERROR', () => {
+  const { fns, consoleCalls } = loadRegistrationSync();
+  const level = (source: string, message: string) => {
+    consoleCalls.length = 0;
+    fns.logSystemError_(source, '', new Error(message));
+    return consoleCalls[0].level;
+  };
+
+  assert.equal(level('club_sync:tampa', 'Service Drive timed out while accessing document with id abc.'), 'warn');
+  assert.equal(level('session_sync:chicago', 'Service Spreadsheets timed out while accessing document with id abc.'), 'warn');
+  assert.equal(level('club_sync', "We're sorry, a server error occurred. Please wait a bit and try again."), 'warn');
+  assert.equal(level('club_sync', 'Lock timeout: another process was holding the lock for too long.'), 'warn');
+
+  assert.equal(level('club_sync:chicago', 'Missing required header: email'), 'error');
+  assert.equal(level('tito_ingest', 'Lock timeout: another process was holding the lock for too long.'), 'error');
+  assert.equal(level('tito_ingest', 'Service Drive timed out while accessing document with id abc.'), 'error');
+});
+
 test('pauseSyncTrigger removes any trigger owned by the current account; installSyncTrigger resumes it', () => {
   const { fns, triggers } = loadRegistrationSync();
   assert.equal(triggers.length, 0);

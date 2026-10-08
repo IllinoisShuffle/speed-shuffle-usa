@@ -444,6 +444,16 @@ function doPost(e) {
         registration
       );
 
+    // Success breadcrumb: without it, a later delivery that heals an
+    // earlier Failed Webhooks row leaves no trace in Cloud Logging.
+    console.info(
+      '[tito_ingest] ok ' +
+      result.registration_id +
+      ' (' +
+      result.club +
+      ')'
+    );
+
     return jsonResponse_({
       ok: true,
       result: result
@@ -825,4 +835,18 @@ function findFirstEmptyRegistrationRow_(
     LAST_DATA_ROW +
     '.'
   );
+}
+
+
+/*
+ * The ingest URL only takes POSTs, but anyone opening it in a browser
+ * (or a chat/email link preview of it) sends a GET. Without this,
+ * Apps Script logs "Script function not found: doGet" at ERROR, which
+ * pages the tech team for nothing.
+ */
+function doGet() {
+  return jsonResponse_({
+    ok: true,
+    message: 'POST only'
+  });
 }
