@@ -58,7 +58,9 @@ const { stage, payoutPositions } = tournamentConfig;
 
       <aside class="card club-standings" id="club-standings" aria-labelledby="club-standings-title">
         <h3 id="club-standings-title">Club standings</h3>
-        <p class="standings-subtitle">A little friendly club rivalry — participation counts, not a performance ranking.</p>
+        <p class="standings-subtitle">{stage === 'final'
+          ? 'A little friendly club rivalry — ranked by participation, with each club’s average score.'
+          : 'A little friendly club rivalry — participation counts, not a performance ranking.'}</p>
         <ul class="standings-list" id="club-standings-list"></ul>
       </aside>
     </div>

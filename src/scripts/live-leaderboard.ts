@@ -1,3 +1,4 @@
+import { clubAverageScores } from '../lib/clubAverages';
 import { clubs, clubsById } from '../lib/clubs';
 import { tournamentConfig } from '../lib/config';
 import { formatRank, prizePercentFor } from '../lib/prizes';
@@ -163,6 +164,7 @@ function renderLeaderboard() {
 function renderClubStandings() {
   if (!latest) return;
   const byId = new Map(latest.stats.map(stat => [stat.clubId, stat]));
+  const averages = stage === 'final' && latest.showScores ? clubAverageScores(latest.players) : new Map<ClubId, number>();
   const sorted = clubs
     .map(club => ({ club, stats: byId.get(club.id) ?? { clubId: club.id, registered: 0, completed: 0 } }))
     .toSorted((a, b) => (stage === 'before' ? b.stats.registered - a.stats.registered : b.stats.completed - a.stats.completed));
@@ -181,6 +183,14 @@ function renderClubStandings() {
     statLine.className = 'standings-stat';
     statLine.textContent = stage === 'before' ? `${stats.registered} registered` : `${stats.completed} / ${stats.registered} completed`;
     item.append(statLine);
+
+    if (stage === 'final' && latest.showScores) {
+      const average = averages.get(club.id);
+      const averageLine = document.createElement('p');
+      averageLine.className = 'standings-average';
+      averageLine.textContent = average !== undefined ? `Avg score ${average.toFixed(1)}` : 'Avg score —';
+      item.append(averageLine);
+    }
 
     const progress = document.createElement('progress');
     progress.max = Math.max(1, stats.registered);
