@@ -249,7 +249,7 @@ function updateWinners(players: PlayerStanding[]) {
   compactEl.hidden = false;
 
   const podiumCards: HTMLElement[] = [];
-  for (const rank of [2, 1, 3]) {
+  for (const rank of [1, 2, 3]) {
     const group = top10.filter(player => player.rank === rank);
     if (!group.length) continue;
     const card = document.createElement('div');
