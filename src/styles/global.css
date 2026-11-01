@@ -360,6 +360,13 @@ button { font: inherit; }
 .podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: end; margin-bottom: 20px; }
 .podium-card { background: var(--hero); color: var(--hero-ink); border-radius: var(--radius-card); padding: 28px 22px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .podium-card--rank-1 { background: var(--deep); padding-block: 44px; }
+/* Cards render in rank order (1, 2, 3) so stacked mobile layout reads top-down;
+   on wide screens rearrange visually into a 2-1-3 podium. */
+@media (min-width: 901px) {
+  .podium-card--rank-2 { order: 1; }
+  .podium-card--rank-1 { order: 2; }
+  .podium-card--rank-3 { order: 3; }
+}
 .podium-rank { font-family: var(--font-display); font-weight: 900; font-size: 2rem; color: var(--accent); }
 .podium-player { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .podium-name { font-weight: 700; font-size: 1.05rem; }
